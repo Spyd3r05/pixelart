@@ -204,12 +204,11 @@ document.querySelectorAll(".tool-btn").forEach((btn) => {
 buildPalette();
 
 // --- Step 5: Grid size switching ---
-
-// TODO: Add a "change" event listener to the "grid-size" element
-// When it changes:
-//   - Show a confirm dialog: "Changing grid size will clear your canvas. Continue?"
-//   - If confirmed: update gridSize with parseInt(e.target.value) and call init()
-//   - If cancelled: revert e.target.value back to gridSize
+document.querySelector("#grid-size").addEventListener("change", (e) => {
+    window.confirm("Changing grid size will clear your canvas. Continue?")
+        ? ((gridSize = parseInt(e.target.value)), init())
+        : (e.target.value = gridSize);
+});
 
 // --- Step 6: PNG export ---
 
