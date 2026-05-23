@@ -1,0 +1,216 @@
+const canvas = document.getElementById("pixel-canvas");
+const ctx = canvas.getContext("2d");
+
+let gridSize = 16;
+let cellSize = 0;
+let grid = [];
+
+let currentColor = "#000000";
+let currentTool = "pen";
+let isDrawing = false;
+let hoveredCell = null;
+
+const PRESET_COLORS = [
+    "#000000",
+    "#ffffff",
+    "#ff0000",
+    "#00ff00",
+    "#0000ff",
+    "#ffff00",
+    "#ff00ff",
+    "#00ffff",
+    "#ff8800",
+    "#8800ff",
+    "#888888",
+    "#553322",
+    "#ff6688",
+    "#88ff66",
+    "#6688ff",
+    "#ffcc00",
+];
+
+// --- Step 1-a: Initialize the grid and canvas ---
+
+function init() {
+    //draw a grid ie 2D array
+    grid = Array.from({ length: gridSize }, () =>
+        Array(gridSize).fill("#ffffff"),
+    );
+
+    cellSize = Math.floor(480 / gridSize);
+
+    canvas.width = gridSize * cellSize;
+    canvas.height = gridSize * cellSize;
+
+    //call to draw the grid
+    render();
+}
+
+// --- Step 1-b: Render the grid onto the canvas ---
+
+function render() {
+    for (let row = 0; row < gridSize; row++) {
+        for (let col = 0; col < gridSize; col++) {
+            ctx.fillStyle = grid[row][col];
+            ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
+
+            ctx.strokeStyle = "#333333";
+            ctx.lineWidth = 0.5;
+            ctx.strokeRect(col * cellSize, row * cellSize, cellSize, cellSize);
+        }
+    }
+
+    if (hoveredCell && !isDrawing) {
+        const { row, col } = hoveredCell;
+        const previewColor = currentTool === "eraser" ? "#ffffff" : currentColor;
+
+        ctx.fillStyle = previewColor;
+        ctx.globalAlpha = 0.4;
+        ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
+        ctx.globalAlpha = 1.0;
+    }
+}
+
+// --- Step 2-a: Map mouse position to grid cell ---
+
+function getCellFromMouse(e) {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const col = Math.floor(x / cellSize);
+    const row = Math.floor(y / cellSize);
+
+    if (row >= 0 && row < gridSize && col >= 0 && col < gridSize) {
+        return { row, col };
+    }
+    return null;
+}
+
+// --- Step 2-b: Paint a single cell ---
+
+function paintCell(row, col) {
+    if (currentTool === "pen") {
+        grid[row][col] = currentColor;
+    } else if (currentTool === "eraser") {
+        grid[row][col] = "#ffffff";
+    }
+    render();
+}
+
+// --- Step 2-c: Mouse event handlers ---
+
+canvas.addEventListener("mousedown", (e) => {
+    isDrawing = true;
+    const cell = getCellFromMouse(e);
+    if (cell) {
+        if (currentTool === "fill") {
+            floodFill(cell.row, cell.col, currentColor);
+        } else {
+            paintCell(cell.row, cell.col);
+        }
+    }
+});
+
+canvas.addEventListener("mousemove", (e) => {
+    const cell = getCellFromMouse(e);
+    hoveredCell = cell;
+
+    if (isDrawing && currentTool !== "fill" && cell) {
+        paintCell(cell.row, cell.col);
+    } else {
+        render();
+    }
+});
+
+canvas.addEventListener("mouseup", () => {
+    isDrawing = false;
+});
+
+canvas.addEventListener("mouseleave", () => {
+    isDrawing = false;
+    hoveredCell = null;
+    render();
+});
+
+// --- Step 3: Flood fill algorithm ---
+
+function floodFill(row, col, newColor) {
+    const targetColor = grid[row][col];
+    if (targetColor === newColor) return;
+
+    const stack = [[row, col]];
+
+    while (stack.length > 0) {
+        const [r, c] = stack.pop();
+
+        if (r < 0 || r >= gridSize || c < 0 || c >= gridSize) continue;
+        if (grid[r][c] !== targetColor) continue;
+
+        grid[r][c] = newColor;
+
+        stack.push([r - 1, c]);
+        stack.push([r + 1, c]);
+        stack.push([r, c - 1]);
+        stack.push([r, c + 1]);
+    }
+
+    render();
+}
+
+// --- Step 4-a: Build the color palette ---
+
+function buildPalette() {
+    // TODO: Get the palette element by id "color-palette"
+    // TODO: Loop through PRESET_COLORS and for each color:
+    //   1. Create a div element
+    //   2. Add the "color-swatch" class
+    //   3. If this color matches currentColor, also add the "active" class
+    //   4. Set its backgroundColor to the color
+    //   5. Add a click handler that:
+    //      - Sets currentColor to this color
+    //      - Syncs the custom color picker value
+    //      - Removes "active" from all swatches
+    //      - Adds "active" to this swatch
+    //   6. Append the swatch to the palette
+}
+
+// --- Step 4-b: Custom color picker ---
+
+// TODO: Add an "input" event listener to the "custom-color" element
+// When it changes:
+//   - Set currentColor to e.target.value
+//   - Remove "active" class from all color swatches
+
+// --- Step 4-c: Tool button switching ---
+
+// TODO: Select all ".tool-btn" elements and add click handlers
+// When a tool button is clicked:
+//   - Set currentTool to btn.dataset.tool
+//   - Remove "active" from all tool buttons
+//   - Add "active" to the clicked button
+
+buildPalette();
+
+// --- Step 5: Grid size switching ---
+
+// TODO: Add a "change" event listener to the "grid-size" element
+// When it changes:
+//   - Show a confirm dialog: "Changing grid size will clear your canvas. Continue?"
+//   - If confirmed: update gridSize with parseInt(e.target.value) and call init()
+//   - If cancelled: revert e.target.value back to gridSize
+
+// --- Step 6: PNG export ---
+
+// TODO: Add a "click" event listener to the "export-btn" element
+// When clicked:
+//   1. Create a new canvas element (not the visible one!)
+//   2. Calculate exportCellSize = Math.max(16, Math.floor(512 / gridSize))
+//   3. Set the export canvas size to gridSize * exportCellSize
+//   4. Loop through the grid and draw each cell (NO grid lines)
+//   5. Create an <a> element with download="pixel-art.png"
+//   6. Set href to exportCanvas.toDataURL("image/png")
+//   7. Call link.click() to trigger the download
+
+// --- Step 7: Start the app! ---
+
+init();
