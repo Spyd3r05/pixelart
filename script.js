@@ -211,17 +211,23 @@ document.querySelector("#grid-size").addEventListener("change", (e) => {
 });
 
 // --- Step 6: PNG export ---
+document.querySelector(".export-btn").addEventListener("click", (e) =>{
+    const exportCanvas = document.createElement('canvas');
+    const exportCtx = exportCanvas.getContext('2d');
+    const exportCellSize = Math.max(16, Math.floor(512 / gridSize));
+    exportCanvas.width = gridSize * exportCellSize;
+    exportCanvas.height = gridSize * exportCellSize;
 
-// TODO: Add a "click" event listener to the "export-btn" element
-// When clicked:
-//   1. Create a new canvas element (not the visible one!)
-//   2. Calculate exportCellSize = Math.max(16, Math.floor(512 / gridSize))
-//   3. Set the export canvas size to gridSize * exportCellSize
-//   4. Loop through the grid and draw each cell (NO grid lines)
-//   5. Create an <a> element with download="pixel-art.png"
-//   6. Set href to exportCanvas.toDataURL("image/png")
-//   7. Call link.click() to trigger the download
-
-// --- Step 7: Start the app! ---
+    for(let row =0; row < gridSize; row++) {
+        for (let col = 0; col < gridSize; col++) {
+            exportCtx.fillStyle = grid[row][col];
+            exportCtx.fillRect(col * exportCellSize, row * exportCellSize, exportCellSize, exportCellSize);
+        }
+    }
+    const link = document.createElement("a");
+    link.download = "pixel-art.png";
+    link.href = exportCanvas.toDataURL("image/png");
+    link.click();
+})
 
 init();
