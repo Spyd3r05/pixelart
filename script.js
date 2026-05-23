@@ -225,6 +225,9 @@ document.querySelector(".export-btn").addEventListener("click", (e) =>{
         }
     }
     const link = document.createElement("a");
+    //confirm download
+    const confirmed = confirm("Do you want to download your pixel art as a PNG image?");
+    if (!confirmed) return;
     link.download = "pixel-art.png";
     link.href = exportCanvas.toDataURL("image/png");
     link.click();
