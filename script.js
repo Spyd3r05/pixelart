@@ -160,34 +160,46 @@ function floodFill(row, col, newColor) {
 // --- Step 4-a: Build the color palette ---
 
 function buildPalette() {
-    // TODO: Get the palette element by id "color-palette"
-    // TODO: Loop through PRESET_COLORS and for each color:
-    //   1. Create a div element
-    //   2. Add the "color-swatch" class
-    //   3. If this color matches currentColor, also add the "active" class
-    //   4. Set its backgroundColor to the color
-    //   5. Add a click handler that:
-    //      - Sets currentColor to this color
-    //      - Syncs the custom color picker value
-    //      - Removes "active" from all swatches
-    //      - Adds "active" to this swatch
-    //   6. Append the swatch to the palette
+    const palette = document.getElementById("color-palette");
+    PRESET_COLORS.forEach((color) => {
+        const swatch = document.createElement("div");
+        swatch.classList.add("color-swatch");
+        if (color === currentColor) {
+            swatch.classList.add("active");
+        }
+        swatch.style.backgroundColor = color;
+        swatch.addEventListener("click", () => {
+            currentColor = color;
+            document.getElementById("custom-color").value = color;
+
+            document.querySelectorAll(".color-swatch").forEach((s) => {
+                s.classList.remove("active");
+            });
+            swatch.classList.add("active");
+        });
+        palette.appendChild(swatch);
+    });
 }
 
 // --- Step 4-b: Custom color picker ---
+document.getElementById("custom-color").addEventListener("input", (e) => {
+    currentColor = e.target.value;
 
-// TODO: Add an "input" event listener to the "custom-color" element
-// When it changes:
-//   - Set currentColor to e.target.value
-//   - Remove "active" class from all color swatches
+    document.querySelectorAll(".color-swatch").forEach((s) => {
+        s.classList.remove("active");
+    });
+});
 
 // --- Step 4-c: Tool button switching ---
-
-// TODO: Select all ".tool-btn" elements and add click handlers
-// When a tool button is clicked:
-//   - Set currentTool to btn.dataset.tool
-//   - Remove "active" from all tool buttons
-//   - Add "active" to the clicked button
+document.querySelectorAll(".tool-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+        currentTool = btn.dataset.tool;
+        document
+            .querySelectorAll(".tool-btn")
+            .forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+    });
+});
 
 buildPalette();
 
