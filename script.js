@@ -225,10 +225,62 @@ document.addEventListener("keydown", (e) => {
 buildPalette();
 
 // --- Step 5: Grid size switching ---
+function saveArtworkToLocalStorage() {
+    try {
+        const payload = {
+            gridSize: gridSize,
+            grid: grid,
+        };
+        localStorage.setItem("pixelArt:last", JSON.stringify(payload));
+    } catch (err) {
+        console.warn("Failed to save artwork to localStorage", err);
+    }
+}
+
+function restoreArtworkFromLocalStorage() {
+    try {
+        const raw = localStorage.getItem("pixelArt:last");
+        if (!raw) return;
+        const payload = JSON.parse(raw);
+        const oldSize = payload.gridSize;
+        const oldGrid = payload.grid;
+        if (!Array.isArray(oldGrid) || oldSize <= 0) return;
+
+        // Nearest-neighbor resampling: for each cell in the new grid, pick the corresponding
+        // source cell from the old grid using floor(row * oldSize / newSize)
+        const newSize = gridSize;
+        const mappedGrid = Array.from({ length: newSize }, () => Array(newSize).fill("#ffffff"));
+
+        for (let r = 0; r < newSize; r++) {
+            for (let c = 0; c < newSize; c++) {
+                const srcR = Math.floor(r * oldSize / newSize);
+                const srcC = Math.floor(c * oldSize / newSize);
+                const color = (oldGrid[srcR] && oldGrid[srcR][srcC]) ? oldGrid[srcR][srcC] : "#ffffff";
+                mappedGrid[r][c] = color;
+            }
+        }
+
+        grid = mappedGrid;
+        render();
+    } catch (err) {
+        console.warn("Failed to restore artwork from localStorage", err);
+    }
+}
+
 document.querySelector("#grid-size").addEventListener("change", (e) => {
-    window.confirm("Changing grid size will clear your canvas. Continue?")
-        ? ((gridSize = parseInt(e.target.value)), init())
-        : (e.target.value = gridSize);
+    const newSize = parseInt(e.target.value);
+    const proceed = window.confirm("Change grid size?");
+    if (!proceed) {
+        e.target.value = gridSize;
+        return;
+    }
+
+    saveArtworkToLocalStorage();
+
+    gridSize = newSize;
+    init();
+
+    restoreArtworkFromLocalStorage();
 });
 
 // --- Step 6: PNG export ---
