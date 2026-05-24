@@ -25,7 +25,6 @@ navigate to the directory
 open with live server if you are using vs code
 
 ## Ideas to Keep Building (i'll add this later on)
-
   - Undo/Redo — Save grid snapshots to an array and navigate back and forth.
   - Save/Load — Store the grid in localStorage so art persists between sessions.
   - Animation — Create multiple frames and play them back as a GIF-like animation.

@@ -190,15 +190,36 @@ document.getElementById("custom-color").addEventListener("input", (e) => {
     });
 });
 
-// --- Step 4-c: Tool button switching ---
+// --- Step 4-c: Tool switching (buttons + keyboard shortcuts) ---
+
+// helper to set the current tool and update UI
+function setTool(tool) {
+    currentTool = tool;
+    document.querySelectorAll(".tool-btn").forEach((b) => b.classList.remove("active"));
+    const btn = document.querySelector(`.tool-btn[data-tool="${tool}"]`);
+    if (btn) btn.classList.add("active");
+}
+
+// wire up click handlers on tool buttons
 document.querySelectorAll(".tool-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
-        currentTool = btn.dataset.tool;
-        document
-            .querySelectorAll(".tool-btn")
-            .forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
+        setTool(btn.dataset.tool);
     });
+});
+
+// keyboard shortcuts: p = pen, e = eraser, f = fill
+document.addEventListener("keydown", (e) => {
+    const tag = e.target && e.target.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.target.isContentEditable) return;
+
+    const key = e.key.toLowerCase();
+    if (key === "p" || key === "P") {
+        setTool("pen");
+    } else if (key === "e" || key === "E") {
+        setTool("eraser");
+    } else if (key === "f" || key === "F") {
+        setTool("fill");
+    }
 });
 
 buildPalette();
