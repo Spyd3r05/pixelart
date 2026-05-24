@@ -356,7 +356,9 @@ document.querySelector(".export-btn").addEventListener("click", (e) =>{
     //confirm download
     const confirmed = confirm("Do you want to download your pixel art as a PNG image?");
     if (!confirmed) return;
-    link.download = "pixel-art.png";
+    //generate random names cause why am i doing barbaric work??
+    const randomValue = Math.floor(Math.random() * 100000);
+    link.download = `pixel-art-${randomValue}.png`;
     link.href = exportCanvas.toDataURL("image/png");
     link.click();
 })
