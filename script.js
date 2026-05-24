@@ -245,18 +245,73 @@ function restoreArtworkFromLocalStorage() {
         const oldSize = payload.gridSize;
         const oldGrid = payload.grid;
         if (!Array.isArray(oldGrid) || oldSize <= 0) return;
-
-        // Nearest-neighbor resampling: for each cell in the new grid, pick the corresponding
-        // source cell from the old grid using floor(row * oldSize / newSize)
         const newSize = gridSize;
         const mappedGrid = Array.from({ length: newSize }, () => Array(newSize).fill("#ffffff"));
 
+        // If sizes are equal just copy
+        if (oldSize === newSize) {
+            for (let r = 0; r < newSize; r++) {
+                for (let c = 0; c < newSize; c++) {
+                    mappedGrid[r][c] = oldGrid[r][c] || "#ffffff";
+                }
+            }
+            grid = mappedGrid;
+            render();
+            return;
+        }
+
+        // Upscale (newSize > oldSize): map each source pixel to a single target pixel.
+        // This makes the artwork occupy fewer grid cells in the higher-resolution grid
+        // (the image will look "smaller" on the grid and leave space to expand),
+        if (newSize > oldSize) {
+            // initialize mappedGrid with white
+            for (let r = 0; r < newSize; r++) {
+                for (let c = 0; c < newSize; c++) mappedGrid[r][c] = "#ffffff";
+            }
+
+            for (let sr = 0; sr < oldSize; sr++) {
+                for (let sc = 0; sc < oldSize; sc++) {
+                    const color = (oldGrid[sr] && oldGrid[sr][sc]) ? oldGrid[sr][sc] : "#ffffff";
+                    // map source center to target index (source -> target mapping)
+                    const tr = Math.min(newSize - 1, Math.floor(((sr + 0.5) * newSize) / oldSize));
+                    const tc = Math.min(newSize - 1, Math.floor(((sc + 0.5) * newSize) / oldSize));
+                    mappedGrid[tr][tc] = color;
+                }
+            }
+
+            grid = mappedGrid;
+            render();
+            return;
+        }
+
+        // Downscale (newSize < oldSize): aggregate source pixels for each target cell.
+        // We'll use majority voting (mode) across the source rectangle that maps to the target cell.
         for (let r = 0; r < newSize; r++) {
+            // source row range [rStart, rEnd] that maps to this target row
+            const rStart = Math.floor((r * oldSize) / newSize);
+            const rEnd = Math.floor(((r + 1) * oldSize) / newSize) - 1;
             for (let c = 0; c < newSize; c++) {
-                const srcR = Math.floor(r * oldSize / newSize);
-                const srcC = Math.floor(c * oldSize / newSize);
-                const color = (oldGrid[srcR] && oldGrid[srcR][srcC]) ? oldGrid[srcR][srcC] : "#ffffff";
-                mappedGrid[r][c] = color;
+                const cStart = Math.floor((c * oldSize) / newSize);
+                const cEnd = Math.floor(((c + 1) * oldSize) / newSize) - 1;
+
+                const counts = Object.create(null);
+                for (let sr = rStart; sr <= rEnd; sr++) {
+                    for (let sc = cStart; sc <= cEnd; sc++) {
+                        const col = (oldGrid[sr] && oldGrid[sr][sc]) ? oldGrid[sr][sc] : "#ffffff";
+                        counts[col] = (counts[col] || 0) + 1;
+                    }
+                }
+
+                // pick color with highest count
+                let bestColor = "#ffffff";
+                let bestCount = -1;
+                for (const col in counts) {
+                    if (counts[col] > bestCount) {
+                        bestCount = counts[col];
+                        bestColor = col;
+                    }
+                }
+                mappedGrid[r][c] = bestColor;
             }
         }
 
