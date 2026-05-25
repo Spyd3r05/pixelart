@@ -31,11 +31,32 @@ const PRESET_COLORS = [
 
 // --- Step 1-a: Initialize the grid and canvas ---
 
-function init() {
-    //draw a grid ie 2D array
-    grid = Array.from({ length: gridSize }, () =>
-        Array(gridSize).fill("#ffffff"),
-    );
+function init(restoreOnLoad = false) {
+    if (restoreOnLoad) {
+        try {
+            const raw = localStorage.getItem("pixelArt:last");
+            if (raw) {
+                const payload = JSON.parse(raw);
+                if (payload && payload.gridSize && Array.isArray(payload.grid)) {
+                    gridSize = payload.gridSize;
+                    grid = payload.grid;
+                    const sizeSelect = document.querySelector("#grid-size");
+                    if (sizeSelect) {
+                        sizeSelect.value = gridSize;
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn("Failed to restore artwork from localStorage on load", err);
+        }
+    }
+
+    // Only initialize with white if grid hasn't been restored/set
+    if (!grid || grid.length !== gridSize) {
+        grid = Array.from({ length: gridSize }, () =>
+            Array(gridSize).fill("#ffffff"),
+        );
+    }
 
     cellSize = Math.floor(480 / gridSize);
 
@@ -123,13 +144,22 @@ canvas.addEventListener("mousemove", (e) => {
 });
 
 canvas.addEventListener("mouseup", () => {
-    isDrawing = false;
+    if (isDrawing) {
+        isDrawing = false;
+        saveArtworkToLocalStorage();
+    }
 });
 
 canvas.addEventListener("mouseleave", () => {
-    isDrawing = false;
-    hoveredCell = null;
-    render();
+    if (isDrawing) {
+        isDrawing = false;
+        hoveredCell = null;
+        render();
+        saveArtworkToLocalStorage();
+    } else {
+        hoveredCell = null;
+        render();
+    }
 });
 
 // --- Step 3: Flood fill algorithm ---
@@ -155,6 +185,7 @@ function floodFill(row, col, newColor) {
     }
 
     render();
+    saveArtworkToLocalStorage();
 }
 
 // --- Step 4-a: Build the color palette ---
@@ -257,6 +288,7 @@ function restoreArtworkFromLocalStorage() {
             }
             grid = mappedGrid;
             render();
+            saveArtworkToLocalStorage();
             return;
         }
 
@@ -281,6 +313,7 @@ function restoreArtworkFromLocalStorage() {
 
             grid = mappedGrid;
             render();
+            saveArtworkToLocalStorage();
             return;
         }
 
@@ -317,6 +350,7 @@ function restoreArtworkFromLocalStorage() {
 
         grid = mappedGrid;
         render();
+        saveArtworkToLocalStorage();
     } catch (err) {
         console.warn("Failed to restore artwork from localStorage", err);
     }
@@ -363,4 +397,4 @@ document.querySelector(".export-btn").addEventListener("click", (e) =>{
     link.click();
 })
 
-init();
+init(true);
