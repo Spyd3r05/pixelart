@@ -58,7 +58,14 @@ function init(restoreOnLoad = false) {
         );
     }
 
-    cellSize = Math.floor(480 / gridSize);
+    // Adapt cell size according to grid size to ensure visibility and ease of drawing
+    if (gridSize <= 16) {
+        cellSize = 30; // 16x16 -> 480px canvas
+    } else if (gridSize <= 32) {
+        cellSize = 20; // 32x32 -> 640px canvas
+    } else {
+        cellSize = 12; // 64x64 -> 768px canvas
+    }
 
     canvas.width = gridSize * cellSize;
     canvas.height = gridSize * cellSize;
