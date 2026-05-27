@@ -9,6 +9,8 @@ let currentColor = "#000000";
 let currentTool = "pen";
 let isDrawing = false;
 let hoveredCell = null;
+let undoStack = [];
+let redoStack = [];
 
 const PRESET_COLORS = [
     "#000000",
@@ -125,12 +127,45 @@ function paintCell(row, col) {
     render();
 }
 
+// --- Step 2-bb: Undo/Redo operations ---
+function saveState() {
+    const gridCopy = grid.map(row => [...row]);
+    undoStack.push(gridCopy);
+    if (undoStack.length > 50) {
+        undoStack.shift();
+    }
+    redoStack = [];
+}
+
+function undo() {
+    if (undoStack.length > 0) {
+        const previousState = undoStack.pop();
+        const currentState = grid.map(row => [...row]);
+        redoStack.push(currentState);
+        grid = previousState;
+        render();
+        saveArtworkToLocalStorage();
+    }
+}
+
+function redo() {
+    if (redoStack.length > 0) {
+        const nextState = redoStack.pop();
+        const currentState = grid.map(row => [...row]);
+        undoStack.push(currentState);
+        grid = nextState;
+        render();
+        saveArtworkToLocalStorage();
+    }
+}
+
 // --- Step 2-c: Mouse event handlers ---
 
 canvas.addEventListener("mousedown", (e) => {
     isDrawing = true;
     const cell = getCellFromMouse(e);
     if (cell) {
+        saveState();
         if (currentTool === "fill") {
             floodFill(cell.row, cell.col, currentColor);
         } else {
@@ -245,18 +280,26 @@ document.querySelectorAll(".tool-btn").forEach((btn) => {
     });
 });
 
-// keyboard shortcuts: p = pen, e = eraser, f = fill
+// keyboard shortcuts: p = pen, e = eraser, f = fill, ctrl+z = undo, ctrl+y = redo
 document.addEventListener("keydown", (e) => {
     const tag = e.target && e.target.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.target.isContentEditable) return;
 
     const key = e.key.toLowerCase();
-    if (key === "p" || key === "P") {
-        setTool("pen");
-    } else if (key === "e" || key === "E") {
-        setTool("eraser");
-    } else if (key === "f" || key === "F") {
-        setTool("fill");
+    if ((e.ctrlKey || e.metaKey) && key === "z") {
+        e.preventDefault();
+        undo();
+    } else if ((e.ctrlKey || e.metaKey) && key === "y") {
+        e.preventDefault();
+        redo();
+    } else if (!e.ctrlKey && !e.metaKey) {
+        if (key === "p") {
+            setTool("pen");
+        } else if (key === "e") {
+            setTool("eraser");
+        } else if (key === "f") {
+            setTool("fill");
+        }
     }
 });
 
@@ -374,6 +417,8 @@ document.querySelector("#grid-size").addEventListener("change", (e) => {
     saveArtworkToLocalStorage();
 
     gridSize = newSize;
+    undoStack = [];
+    redoStack = [];
     init();
 
     restoreArtworkFromLocalStorage();
