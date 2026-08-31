@@ -32,10 +32,13 @@ header h1 {
 main {
     display: flex;
     flex: 1;
+    min-height: 0;
+    overflow: auto;
 }
 
 .toolbar {
-    width: 200px;
+    width: 240px;
+    min-width: 240px;
     background-color: #ebe4d8;
     padding: 16px;
     display: flex;
@@ -44,18 +47,18 @@ main {
     border-right: 2px solid #c9b99a;
 }
 
-.canvas-container {
-    flex: 1;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 24px;
-    overflow: auto;
-}
-
 canvas {
-    border: 2px solid #c9b99a;
+    flex: 0 0 auto;
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: none;
+    max-height: none;
+    border: none;
+    border-radius: 0;
     cursor: crosshair;
+    background: #f5f0e8;
+    image-rendering: pixelated;
 }
 
 .tool-section {
@@ -71,31 +74,63 @@ canvas {
     color: #8a7d6b;
 }
 
-.tool-buttons {
+.tool-buttons,
+.action-row {
     display: flex;
     gap: 6px;
+    flex-wrap: wrap;
+}
+
+.tool-btn,
+.secondary-btn,
+.export-btn {
+    border: 2px solid #c9b99a;
+    border-radius: 8px;
+    background-color: #f5f0e8;
+    color: #3d3529;
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s, transform 0.15s;
+}
+
+.tool-btn:hover,
+.secondary-btn:hover,
+.export-btn:hover {
+    background-color: #e2d9c8;
 }
 
 .tool-btn {
     width: 48px;
     height: 48px;
     font-size: 1.4rem;
-    border: 2px solid #c9b99a;
-    border-radius: 8px;
-    background-color: #f5f0e8;
-    color: #3d3529;
-    cursor: pointer;
-    transition: background-color 0.15s, border-color 0.15s;
-}
-
-.tool-btn:hover {
-    background-color: #e2d9c8;
 }
 
 .tool-btn.active {
     background-color: #b0603a;
     border-color: #b0603a;
     color: #f5f0e8;
+}
+
+.secondary-btn {
+    padding: 9px 10px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    flex: 1;
+}
+
+.delete-btn {
+    width: 100%;
+    padding: 9px 10px;
+    border: 2px solid #a94442;
+    border-radius: 8px;
+    background-color: #f7d9d6;
+    color: #7d2523;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.delete-btn:hover {
+    background-color: #edb8b4;
 }
 
 .color-palette {
@@ -105,21 +140,39 @@ canvas {
 }
 
 .color-swatch {
-    width: 100%;
-    aspect-ratio: 1;
+    min-height: 74px;
     border: 2px solid #c9b99a;
     border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
     cursor: pointer;
     transition: border-color 0.15s, transform 0.15s;
+    overflow: hidden;
+    background: #f5f0e8;
 }
 
 .color-swatch:hover {
-    transform: scale(1.1);
+    transform: scale(1.08);
 }
 
 .color-swatch.active {
     border-color: #b0603a;
     transform: scale(1.15);
+}
+
+.swatch-color {
+    flex: 1;
+    min-height: 42px;
+}
+
+.swatch-label {
+    padding: 5px 3px;
+    color: #3d3529;
+    background: #f5f0e8;
+    font-size: 0.68rem;
+    line-height: 1.1;
+    text-align: center;
 }
 
 .custom-color-label {
@@ -140,7 +193,115 @@ canvas {
     background: none;
 }
 
-select {
+.color-picker-trigger {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+kbd {
+    padding: 2px 6px;
+    border: 1px solid #c9b99a;
+    border-radius: 4px;
+    background: #ebe4d8;
+    font-size: 0.72rem;
+}
+
+.current-color-preview {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #8a7d6b;
+    font-size: 0.75rem;
+}
+
+.current-color-preview span {
+    width: 18px;
+    height: 18px;
+    border: 1px solid #3d3529;
+    border-radius: 3px;
+}
+
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 24px;
+    background: rgba(25, 18, 12, 0.58);
+}
+
+.modal-backdrop[hidden] {
+    display: none;
+}
+
+.color-modal {
+    width: min(620px, 100%);
+    max-height: min(720px, 90vh);
+    overflow-y: auto;
+    padding: 20px;
+    border: 2px solid #c9b99a;
+    border-radius: 12px;
+    background: #ebe4d8;
+    box-shadow: 0 18px 60px rgba(25, 18, 12, 0.28);
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+.modal-header h2 {
+    color: #b0603a;
+    font-size: 1.1rem;
+}
+
+.modal-close {
+    width: 34px;
+    height: 34px;
+    border: 2px solid #c9b99a;
+    border-radius: 6px;
+    background: #f5f0e8;
+    color: #3d3529;
+    cursor: pointer;
+    font-size: 1.4rem;
+    line-height: 1;
+}
+
+.custom-color-picker {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid #c9b99a;
+}
+
+.custom-color-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.custom-color-row input[type="color"] {
+    width: 44px;
+    height: 36px;
+    border: 0;
+    cursor: pointer;
+}
+
+.custom-color-row span {
+    min-width: 74px;
+    color: #3d3529;
+    font: 0.8rem monospace;
+}
+
+select,
+input[type="number"] {
+    width: 100%;
     padding: 8px;
     border: 2px solid #c9b99a;
     border-radius: 8px;
@@ -150,17 +311,30 @@ select {
     cursor: pointer;
 }
 
+.size-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.size-row label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: #8a7d6b;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
 .export-btn {
     margin-top: auto;
     padding: 12px;
     border: none;
-    border-radius: 8px;
     background-color: #b0603a;
     color: #f5f0e8;
     font-size: 1rem;
     font-weight: bold;
-    cursor: pointer;
-    transition: background-color 0.15s;
 }
 
 .export-btn:hover {
@@ -174,6 +348,7 @@ select {
 
     .toolbar {
         width: 100%;
+        min-width: 0;
         flex-direction: row;
         flex-wrap: wrap;
         border-right: none;

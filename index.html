@@ -13,6 +13,14 @@
 <main>
     <aside class="toolbar" id="toolbar">
         <div class="tool-section">
+            <h3>Mode</h3>
+            <select id="mode-select">
+                <option value="draw" selected>Draw</option>
+                <option value="progress">Progress Tracker</option>
+            </select>
+        </div>
+
+        <div class="tool-section">
             <h3>Tools</h3>
             <div class="tool-buttons">
                 <button class="tool-btn active" data-tool="pen" title="Pen">✏️</button>
@@ -23,28 +31,67 @@
 
         <div class="tool-section">
             <h3>Colors</h3>
-            <div class="color-palette" id="color-palette"></div>
-            <label class="custom-color-label">
-                Custom
-                <input type="color" id="custom-color" value="#000000" />
-            </label>
+            <button id="open-color-btn" class="secondary-btn color-picker-trigger" type="button">
+                Choose Color <kbd>C</kbd>
+            </button>
+            <div id="current-color-preview" class="current-color-preview">
+                Current: <span></span>
+            </div>
         </div>
 
         <div class="tool-section">
             <h3>Grid Size</h3>
             <select id="grid-size">
-                <option value="16" selected>16 x 16</option>
-                <option value="32">32 x 32</option>
+                <option value="16">16 x 16</option>
+                <option value="32" selected>32 x 32</option>
                 <option value="64">64 x 64</option>
+                <option value="96">96 x 96</option>
+                <option value="128">128 x 128</option>
+                <option value="custom">Custom</option>
             </select>
+            <div class="size-row">
+                <label>
+                    Width
+                    <input id="grid-width" type="number" min="8" max="200" step="1" value="32" />
+                </label>
+                <label>
+                    Height
+                    <input id="grid-height" type="number" min="8" max="200" step="1" value="32" />
+                </label>
+            </div>
+            <button id="apply-grid-size" class="secondary-btn" type="button">Apply Grid</button>
+        </div>
+
+        <div class="tool-section actions">
+            <h3>History</h3>
+            <div class="action-row">
+                <button id="undo-btn" class="secondary-btn" type="button">Undo</button>
+                <button id="redo-btn" class="secondary-btn" type="button">Redo</button>
+            </div>
+            <button id="delete-btn" class="delete-btn" type="button">Delete Saved Work</button>
         </div>
 
         <button class="export-btn" id="export-btn">Download PNG</button>
     </aside>
-    <div class="canvas-container">
-        <canvas id="pixel-canvas"></canvas>
-    </div>
+    <canvas id="pixel-canvas"></canvas>
 </main>
+<div id="color-modal" class="modal-backdrop" hidden>
+    <section class="color-modal" role="dialog" aria-modal="true" aria-labelledby="color-modal-title">
+        <div class="modal-header">
+            <h2 id="color-modal-title">Choose a Color</h2>
+            <button id="close-color-btn" class="modal-close" type="button" aria-label="Close color picker">&times;</button>
+        </div>
+        <div class="color-palette" id="color-palette"></div>
+        <div class="custom-color-picker">
+            <label class="custom-color-label" for="custom-color">Custom color</label>
+            <div class="custom-color-row">
+                <input type="color" id="custom-color" value="#000000" />
+                <span id="custom-color-value">#000000</span>
+                <button id="apply-custom-color" class="secondary-btn" type="button">Use Custom Color</button>
+            </div>
+        </div>
+    </section>
+</div>
 <script src="script.js"></script>
 </body>
 </html>
