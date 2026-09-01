@@ -64,6 +64,7 @@ Then visit `http://localhost:8000`.
 - `E` — eraser tool
 - `F` — fill tool
 - `D` — draw mode
+- `C` — Color Swatches
 - `G` — progress tracker mode
 - `Ctrl/Cmd + Z` — undo
 - `Ctrl/Cmd + Y` — redo
