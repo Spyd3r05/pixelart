@@ -9,6 +9,7 @@ let grid = [];
 let currentColor = "#000000";
 let currentTool = "pen";
 let currentMode = "draw";
+let currentAnchor = "center";
 let isDrawing = false;
 let hoveredCell = null;
 let selectedRow = null;
@@ -156,25 +157,7 @@ function restoreArtworkFromLocalStorage() {
   }
 }
 
-function mapGridToNewSize(oldGrid, oldWidth, oldHeight, newWidth, newHeight) {
-  const mappedGrid = createEmptyGrid(newWidth, newHeight);
-  if (!oldGrid || !oldGrid.length) return mappedGrid;
-
-  const sourceWidth = oldGrid[0]?.length || oldWidth || 1;
-  const sourceHeight = oldGrid.length || oldHeight || 1;
-
-  for (let row = 0; row < newHeight; row++) {
-    for (let col = 0; col < newWidth; col++) {
-      const sourceRow = Math.min(sourceHeight - 1, Math.floor((row / Math.max(1, newHeight)) * sourceHeight));
-      const sourceCol = Math.min(sourceWidth - 1, Math.floor((col / Math.max(1, newWidth)) * sourceWidth));
-      mappedGrid[row][col] = oldGrid[sourceRow]?.[sourceCol] || "#ffffff";
-    }
-  }
-
-  return mappedGrid;
-}
-
-function applyGridSize(nextWidth, nextHeight, { preserveArtwork = true } = {}) {
+function applyGridSize(nextWidth, nextHeight, { preserveArtwork = true, anchor = currentAnchor } = {}) {
   const safeWidth = clamp(Number(nextWidth) || gridWidth, 8, 200);
   const safeHeight = clamp(Number(nextHeight) || gridHeight, 8, 200);
   if (safeWidth === gridWidth && safeHeight === gridHeight) {
@@ -183,7 +166,7 @@ function applyGridSize(nextWidth, nextHeight, { preserveArtwork = true } = {}) {
 
   const previousGrid = cloneGrid(grid);
   const nextGrid = preserveArtwork
-    ? mapGridToNewSize(previousGrid, gridWidth, gridHeight, safeWidth, safeHeight)
+    ? reanchorGrid(previousGrid, gridWidth, gridHeight, safeWidth, safeHeight, anchor)
     : createEmptyGrid(safeWidth, safeHeight);
 
   gridWidth = safeWidth;
@@ -193,6 +176,38 @@ function applyGridSize(nextWidth, nextHeight, { preserveArtwork = true } = {}) {
   updateCanvasMetrics();
   render();
   saveArtworkToLocalStorage();
+}
+
+function reanchorGrid(oldGrid, oldWidth, oldHeight, newWidth, newHeight, anchor) {
+  const newGrid = createEmptyGrid(newWidth, newHeight);
+
+  let offsetX = 0;
+  let offsetY = 0;
+
+  switch (anchor) {
+    case "top-left": offsetX = 0; offsetY = 0; break;
+    case "top-center": offsetX = Math.floor((newWidth - oldWidth) / 2); offsetY = 0; break;
+    case "top-right": offsetX = newWidth - oldWidth; offsetY = 0; break;
+    case "middle-left": offsetX = 0; offsetY = Math.floor((newHeight - oldHeight) / 2); break;
+    case "center": offsetX = Math.floor((newWidth - oldWidth) / 2); offsetY = Math.floor((newHeight - oldHeight) / 2); break;
+    case "middle-right": offsetX = newWidth - oldWidth; offsetY = Math.floor((newHeight - oldHeight) / 2); break;
+    case "bottom-left": offsetX = 0; offsetY = newHeight - oldHeight; break;
+    case "bottom-center": offsetX = Math.floor((newWidth - oldWidth) / 2); offsetY = newHeight - oldHeight; break;
+    case "bottom-right": offsetX = newWidth - oldWidth; offsetY = newHeight - oldHeight; break;
+  }
+
+  for (let row = 0; row < oldHeight; row++) {
+    for (let col = 0; col < oldWidth; col++) {
+      const newRow = row + offsetY;
+      const newCol = col + offsetX;
+
+      if (newRow >= 0 && newRow < newHeight && newCol >= 0 && newCol < newWidth) {
+        newGrid[newRow][newCol] = oldGrid[row][col];
+      }
+    }
+  }
+
+  return newGrid;
 }
 
 function setTool(tool) {
@@ -507,7 +522,19 @@ document.getElementById("apply-grid-size").addEventListener("click", () => {
   const width = Number(document.getElementById("grid-width").value) || gridWidth;
   const height = Number(document.getElementById("grid-height").value) || gridHeight;
   saveState();
-  applyGridSize(width, height);
+  applyGridSize(width, height, { anchor: currentAnchor });
+});
+
+document.querySelectorAll(".anchor-btn").forEach((button) => {
+  button.addEventListener("click", () => {
+    currentAnchor = button.dataset.anchor;
+    document.querySelectorAll(".anchor-btn").forEach((btn) => {
+      btn.classList.remove("active");
+      btn.removeAttribute("aria-current");
+    });
+    button.classList.add("active");
+    button.setAttribute("aria-current", "page");
+  });
 });
 
 document.getElementById("undo-btn").addEventListener("click", undo);
