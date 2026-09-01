@@ -8,6 +8,7 @@ A desktop-first browser app for detailed pixel art, charted crochet patterns, an
 - Keyboard shortcuts for undo/redo with Ctrl+Z and Ctrl+Y
 - Side and top/bottom numbering with alternating parity for easy pattern tracking
 - Artwork persistence when resizing the grid without expanding the original design unexpectedly
+- Directional canvas expansion and cropping with 9-anchor positioning
 - PNG export that includes the pixel art plus the numbered guide sheet for pattern reference
 
 ## Features
@@ -18,6 +19,7 @@ A desktop-first browser app for detailed pixel art, charted crochet patterns, an
 - Color palette — preset swatches plus a custom color picker
 - Color picker modal — press `C` to open an aligned, labeled palette without scrolling
 - Preset and custom grid sizing — 16x16, 32x32, 64x64, 96x96, 128x128, and custom dimensions
+- Canvas expansion/cropping — use the 9-anchor selector to expand or crop your canvas from any edge or corner
 - Undo/redo history — save the previous artwork state before each editing action
 - Local save — keep the project in the browser between sessions until the user explicitly deletes it
 - Delete Saved Work — permanently clear the stored artwork and reset to a blank 32x32 grid
@@ -71,7 +73,7 @@ Then visit `http://localhost:8000`.
 
 ## Notes for pattern work
 - Numbers alternate on the grid edges, with odd values on the right and even values on the left; top and bottom rows follow the same alternating pattern.
-- When the grid size changes, the existing art is remapped to the new dimensions without blowing up the design beyond the same drawn footprint.
+- When changing grid size, use the anchor selector (the 3x3 grid) to decide which corner or side your artwork should stick to while the rest of the canvas expands or crops.
 - Exported PNGs are designed to be printed or referenced while stitching or tracing the pattern.
 
 ## License
