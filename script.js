@@ -1,407 +1,646 @@
 const canvas = document.getElementById("pixel-canvas");
 const ctx = canvas.getContext("2d");
+const STORAGE_KEY = "pixelArt:last";
 
-let gridSize = 16;
-let cellSize = 0;
+let gridWidth = 32;
+let gridHeight = 32;
+let cellSize = 18;
 let grid = [];
-
 let currentColor = "#000000";
 let currentTool = "pen";
+let currentMode = "draw";
 let isDrawing = false;
 let hoveredCell = null;
+let selectedRow = null;
+let undoStack = [];
+let redoStack = [];
+let GUIDE_PADDING = 52;
+let gridOriginX = 0;
+let gridOriginY = 0;
 
 const PRESET_COLORS = [
-    "#000000",
-    "#ffffff",
-    "#ff0000",
-    "#00ff00",
-    "#0000ff",
-    "#ffff00",
-    "#ff00ff",
-    "#00ffff",
-    "#ff8800",
-    "#8800ff",
-    "#888888",
-    "#553322",
-    "#ff6688",
-    "#88ff66",
-    "#6688ff",
-    "#ffcc00",
+  "#000000",
+  "#ffffff",
+  "#ff0000",
+  "#00ff00",
+  "#0000ff",
+  "#ffff00",
+  "#ff00ff",
+  "#00ffff",
+  "#ff8800",
+  "#8800ff",
+  "#888888",
+  "#553322",
+  "#ff6688",
+  "#88ff66",
+  "#6688ff",
+  "#ffcc00",
 ];
 
-// --- Step 1-a: Initialize the grid and canvas ---
+const COLOR_NAMES = [
+  "Black",
+  "White",
+  "Red",
+  "Lime",
+  "Blue",
+  "Yellow",
+  "Magenta",
+  "Cyan",
+  "Orange",
+  "Purple",
+  "Gray",
+  "Brown",
+  "Pink",
+  "Light Green",
+  "Cornflower Blue",
+  "Gold",
+];
 
-function init(restoreOnLoad = false) {
-    if (restoreOnLoad) {
-        try {
-            const raw = localStorage.getItem("pixelArt:last");
-            if (raw) {
-                const payload = JSON.parse(raw);
-                if (payload && payload.gridSize && Array.isArray(payload.grid)) {
-                    gridSize = payload.gridSize;
-                    grid = payload.grid;
-                    const sizeSelect = document.querySelector("#grid-size");
-                    if (sizeSelect) {
-                        sizeSelect.value = gridSize;
-                    }
-                }
-            }
-        } catch (err) {
-            console.warn("Failed to restore artwork from localStorage on load", err);
-        }
-    }
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
 
-    // Only initialize with white if grid hasn't been restored/set
-    if (!grid || grid.length !== gridSize) {
-        grid = Array.from({ length: gridSize }, () =>
-            Array(gridSize).fill("#ffffff"),
-        );
-    }
+function createEmptyGrid(width, height) {
+  return Array.from({ length: height }, () => Array(width).fill("#ffffff"));
+}
 
-    // Adapt cell size according to grid size to ensure visibility and ease of drawing
-    if (gridSize <= 16) {
-        cellSize = 30; // 16x16 -> 480px canvas
-    } else if (gridSize <= 32) {
-        cellSize = 20; // 32x32 -> 640px canvas
+function cloneGrid(sourceGrid) {
+  return sourceGrid.map((row) => [...row]);
+}
+
+function syncGridInputs() {
+  const widthInput = document.getElementById("grid-width");
+  const heightInput = document.getElementById("grid-height");
+  const presetSelect = document.getElementById("grid-size");
+
+  if (widthInput) widthInput.value = String(gridWidth);
+  if (heightInput) heightInput.value = String(gridHeight);
+  if (presetSelect) {
+    const presetValue = String(gridWidth);
+    if (Array.from(presetSelect.options).some((option) => option.value === presetValue)) {
+      presetSelect.value = presetValue;
     } else {
-        cellSize = 12; // 64x64 -> 768px canvas
+      presetSelect.value = "custom";
     }
-
-    canvas.width = gridSize * cellSize;
-    canvas.height = gridSize * cellSize;
-
-    //call to draw the grid
-    render();
+  }
 }
 
-// --- Step 1-b: Render the grid onto the canvas ---
-
-function render() {
-    for (let row = 0; row < gridSize; row++) {
-        for (let col = 0; col < gridSize; col++) {
-            ctx.fillStyle = grid[row][col];
-            ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
-
-            ctx.strokeStyle = "#333333";
-            ctx.lineWidth = 0.5;
-            ctx.strokeRect(col * cellSize, row * cellSize, cellSize, cellSize);
-        }
-    }
-
-    if (hoveredCell && !isDrawing) {
-        const { row, col } = hoveredCell;
-        const previewColor = currentTool === "eraser" ? "#ffffff" : currentColor;
-
-        ctx.fillStyle = previewColor;
-        ctx.globalAlpha = 0.4;
-        ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
-        ctx.globalAlpha = 1.0;
-    }
+function updateCanvasMetrics() {
+  const guideSpace = 140;
+  cellSize = 44;
+  gridOriginX = 70;
+  gridOriginY = 70;
+  canvas.width = gridWidth * cellSize + guideSpace;
+  canvas.height = gridHeight * cellSize + guideSpace;
 }
 
-// --- Step 2-a: Map mouse position to grid cell ---
-
-function getCellFromMouse(e) {
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const col = Math.floor(x / cellSize);
-    const row = Math.floor(y / cellSize);
-
-    if (row >= 0 && row < gridSize && col >= 0 && col < gridSize) {
-        return { row, col };
-    }
-    return null;
-}
-
-// --- Step 2-b: Paint a single cell ---
-
-function paintCell(row, col) {
-    if (currentTool === "pen") {
-        grid[row][col] = currentColor;
-    } else if (currentTool === "eraser") {
-        grid[row][col] = "#ffffff";
-    }
-    render();
-}
-
-// --- Step 2-c: Mouse event handlers ---
-
-canvas.addEventListener("mousedown", (e) => {
-    isDrawing = true;
-    const cell = getCellFromMouse(e);
-    if (cell) {
-        if (currentTool === "fill") {
-            floodFill(cell.row, cell.col, currentColor);
-        } else {
-            paintCell(cell.row, cell.col);
-        }
-    }
-});
-
-canvas.addEventListener("mousemove", (e) => {
-    const cell = getCellFromMouse(e);
-    hoveredCell = cell;
-
-    if (isDrawing && currentTool !== "fill" && cell) {
-        paintCell(cell.row, cell.col);
-    } else {
-        render();
-    }
-});
-
-canvas.addEventListener("mouseup", () => {
-    if (isDrawing) {
-        isDrawing = false;
-        saveArtworkToLocalStorage();
-    }
-});
-
-canvas.addEventListener("mouseleave", () => {
-    if (isDrawing) {
-        isDrawing = false;
-        hoveredCell = null;
-        render();
-        saveArtworkToLocalStorage();
-    } else {
-        hoveredCell = null;
-        render();
-    }
-});
-
-// --- Step 3: Flood fill algorithm ---
-
-function floodFill(row, col, newColor) {
-    const targetColor = grid[row][col];
-    if (targetColor === newColor) return;
-
-    const stack = [[row, col]];
-
-    while (stack.length > 0) {
-        const [r, c] = stack.pop();
-
-        if (r < 0 || r >= gridSize || c < 0 || c >= gridSize) continue;
-        if (grid[r][c] !== targetColor) continue;
-
-        grid[r][c] = newColor;
-
-        stack.push([r - 1, c]);
-        stack.push([r + 1, c]);
-        stack.push([r, c - 1]);
-        stack.push([r, c + 1]);
-    }
-
-    render();
-    saveArtworkToLocalStorage();
-}
-
-// --- Step 4-a: Build the color palette ---
-
-function buildPalette() {
-    const palette = document.getElementById("color-palette");
-    PRESET_COLORS.forEach((color) => {
-        const swatch = document.createElement("div");
-        swatch.classList.add("color-swatch");
-        if (color === currentColor) {
-            swatch.classList.add("active");
-        }
-        swatch.style.backgroundColor = color;
-        swatch.addEventListener("click", () => {
-            currentColor = color;
-            document.getElementById("custom-color").value = color;
-
-            document.querySelectorAll(".color-swatch").forEach((s) => {
-                s.classList.remove("active");
-            });
-            swatch.classList.add("active");
-        });
-        palette.appendChild(swatch);
-    });
-}
-
-// --- Step 4-b: Custom color picker ---
-document.getElementById("custom-color").addEventListener("input", (e) => {
-    currentColor = e.target.value;
-
-    document.querySelectorAll(".color-swatch").forEach((s) => {
-        s.classList.remove("active");
-    });
-});
-
-// --- Step 4-c: Tool switching (buttons + keyboard shortcuts) ---
-
-// helper to set the current tool and update UI
-function setTool(tool) {
-    currentTool = tool;
-    document.querySelectorAll(".tool-btn").forEach((b) => b.classList.remove("active"));
-    const btn = document.querySelector(`.tool-btn[data-tool="${tool}"]`);
-    if (btn) btn.classList.add("active");
-}
-
-// wire up click handlers on tool buttons
-document.querySelectorAll(".tool-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-        setTool(btn.dataset.tool);
-    });
-});
-
-// keyboard shortcuts: p = pen, e = eraser, f = fill
-document.addEventListener("keydown", (e) => {
-    const tag = e.target && e.target.tagName;
-    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.target.isContentEditable) return;
-
-    const key = e.key.toLowerCase();
-    if (key === "p" || key === "P") {
-        setTool("pen");
-    } else if (key === "e" || key === "E") {
-        setTool("eraser");
-    } else if (key === "f" || key === "F") {
-        setTool("fill");
-    }
-});
-
-buildPalette();
-
-// --- Step 5: Grid size switching ---
 function saveArtworkToLocalStorage() {
-    try {
-        const payload = {
-            gridSize: gridSize,
-            grid: grid,
-        };
-        localStorage.setItem("pixelArt:last", JSON.stringify(payload));
-    } catch (err) {
-        console.warn("Failed to save artwork to localStorage", err);
-    }
+  try {
+    const payload = {
+      version: 1,
+      gridWidth,
+      gridHeight,
+      grid,
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch (error) {
+    console.warn("Failed to save artwork to localStorage", error);
+  }
+}
+
+function deleteSavedArtwork() {
+  const confirmed = window.confirm(
+    "Delete the saved artwork permanently? This cannot be undone.",
+  );
+  if (!confirmed) return;
+
+  localStorage.removeItem(STORAGE_KEY);
+  gridWidth = 32;
+  gridHeight = 32;
+  grid = createEmptyGrid(gridWidth, gridHeight);
+  undoStack = [];
+  redoStack = [];
+  selectedRow = null;
+  syncGridInputs();
+  updateCanvasMetrics();
+  render();
 }
 
 function restoreArtworkFromLocalStorage() {
-    try {
-        const raw = localStorage.getItem("pixelArt:last");
-        if (!raw) return;
-        const payload = JSON.parse(raw);
-        const oldSize = payload.gridSize;
-        const oldGrid = payload.grid;
-        if (!Array.isArray(oldGrid) || oldSize <= 0) return;
-        const newSize = gridSize;
-        const mappedGrid = Array.from({ length: newSize }, () => Array(newSize).fill("#ffffff"));
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
 
-        // If sizes are equal just copy
-        if (oldSize === newSize) {
-            for (let r = 0; r < newSize; r++) {
-                for (let c = 0; c < newSize; c++) {
-                    mappedGrid[r][c] = oldGrid[r][c] || "#ffffff";
-                }
-            }
-            grid = mappedGrid;
-            render();
-            saveArtworkToLocalStorage();
-            return;
-        }
+    const payload = JSON.parse(raw);
+    const savedWidth = Number(payload.gridWidth) || 0;
+    const savedHeight = Number(payload.gridHeight) || 0;
+    const savedGrid = Array.isArray(payload.grid) ? payload.grid : [];
 
-        // Upscale (newSize > oldSize): map each source pixel to a single target pixel.
-        // This makes the artwork occupy fewer grid cells in the higher-resolution grid
-        // (the image will look "smaller" on the grid and leave space to expand),
-        if (newSize > oldSize) {
-            // initialize mappedGrid with white
-            for (let r = 0; r < newSize; r++) {
-                for (let c = 0; c < newSize; c++) mappedGrid[r][c] = "#ffffff";
-            }
-
-            for (let sr = 0; sr < oldSize; sr++) {
-                for (let sc = 0; sc < oldSize; sc++) {
-                    const color = (oldGrid[sr] && oldGrid[sr][sc]) ? oldGrid[sr][sc] : "#ffffff";
-                    // map source center to target index (source -> target mapping)
-                    const tr = Math.min(newSize - 1, Math.floor(((sr + 0.5) * newSize) / oldSize));
-                    const tc = Math.min(newSize - 1, Math.floor(((sc + 0.5) * newSize) / oldSize));
-                    mappedGrid[tr][tc] = color;
-                }
-            }
-
-            grid = mappedGrid;
-            render();
-            saveArtworkToLocalStorage();
-            return;
-        }
-
-        // Downscale (newSize < oldSize): aggregate source pixels for each target cell.
-        // We'll use majority voting (mode) across the source rectangle that maps to the target cell.
-        for (let r = 0; r < newSize; r++) {
-            // source row range [rStart, rEnd] that maps to this target row
-            const rStart = Math.floor((r * oldSize) / newSize);
-            const rEnd = Math.floor(((r + 1) * oldSize) / newSize) - 1;
-            for (let c = 0; c < newSize; c++) {
-                const cStart = Math.floor((c * oldSize) / newSize);
-                const cEnd = Math.floor(((c + 1) * oldSize) / newSize) - 1;
-
-                const counts = Object.create(null);
-                for (let sr = rStart; sr <= rEnd; sr++) {
-                    for (let sc = cStart; sc <= cEnd; sc++) {
-                        const col = (oldGrid[sr] && oldGrid[sr][sc]) ? oldGrid[sr][sc] : "#ffffff";
-                        counts[col] = (counts[col] || 0) + 1;
-                    }
-                }
-
-                // pick color with highest count
-                let bestColor = "#ffffff";
-                let bestCount = -1;
-                for (const col in counts) {
-                    if (counts[col] > bestCount) {
-                        bestCount = counts[col];
-                        bestColor = col;
-                    }
-                }
-                mappedGrid[r][c] = bestColor;
-            }
-        }
-
-        grid = mappedGrid;
-        render();
-        saveArtworkToLocalStorage();
-    } catch (err) {
-        console.warn("Failed to restore artwork from localStorage", err);
+    if (!savedGrid.length || savedWidth <= 0 || savedHeight <= 0) {
+      return;
     }
+
+    const nextGrid = createEmptyGrid(savedWidth, savedHeight);
+    for (let row = 0; row < savedHeight; row++) {
+      for (let col = 0; col < savedWidth; col++) {
+        nextGrid[row][col] = savedGrid[row]?.[col] || "#ffffff";
+      }
+    }
+
+    gridWidth = savedWidth;
+    gridHeight = savedHeight;
+    grid = nextGrid;
+    syncGridInputs();
+  } catch (error) {
+    console.warn("Failed to restore artwork from localStorage", error);
+  }
 }
 
-document.querySelector("#grid-size").addEventListener("change", (e) => {
-    const newSize = parseInt(e.target.value);
-    const proceed = window.confirm("Change grid size?");
-    if (!proceed) {
-        e.target.value = gridSize;
-        return;
+function mapGridToNewSize(oldGrid, oldWidth, oldHeight, newWidth, newHeight) {
+  const mappedGrid = createEmptyGrid(newWidth, newHeight);
+  if (!oldGrid || !oldGrid.length) return mappedGrid;
+
+  const sourceWidth = oldGrid[0]?.length || oldWidth || 1;
+  const sourceHeight = oldGrid.length || oldHeight || 1;
+
+  for (let row = 0; row < newHeight; row++) {
+    for (let col = 0; col < newWidth; col++) {
+      const sourceRow = Math.min(sourceHeight - 1, Math.floor((row / Math.max(1, newHeight)) * sourceHeight));
+      const sourceCol = Math.min(sourceWidth - 1, Math.floor((col / Math.max(1, newWidth)) * sourceWidth));
+      mappedGrid[row][col] = oldGrid[sourceRow]?.[sourceCol] || "#ffffff";
     }
+  }
 
-    saveArtworkToLocalStorage();
+  return mappedGrid;
+}
 
-    gridSize = newSize;
-    init();
+function applyGridSize(nextWidth, nextHeight, { preserveArtwork = true } = {}) {
+  const safeWidth = clamp(Number(nextWidth) || gridWidth, 8, 200);
+  const safeHeight = clamp(Number(nextHeight) || gridHeight, 8, 200);
+  if (safeWidth === gridWidth && safeHeight === gridHeight) {
+    return;
+  }
 
-    restoreArtworkFromLocalStorage();
+  const previousGrid = cloneGrid(grid);
+  const nextGrid = preserveArtwork
+    ? mapGridToNewSize(previousGrid, gridWidth, gridHeight, safeWidth, safeHeight)
+    : createEmptyGrid(safeWidth, safeHeight);
+
+  gridWidth = safeWidth;
+  gridHeight = safeHeight;
+  grid = nextGrid;
+  syncGridInputs();
+  updateCanvasMetrics();
+  render();
+  saveArtworkToLocalStorage();
+}
+
+function setTool(tool) {
+  currentTool = tool;
+  document.querySelectorAll(".tool-btn").forEach((button) => {
+    button.classList.toggle("active", button.dataset.tool === tool);
+  });
+}
+
+function setMode(mode) {
+  currentMode = mode;
+  if (mode === "progress") {
+    selectedRow = null;
+  }
+  const modeSelect = document.getElementById("mode-select");
+  if (modeSelect) modeSelect.value = mode;
+  render();
+}
+
+function getCellFromMouse(event) {
+  const rect = canvas.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const y = event.clientY - rect.top;
+
+  const col = Math.floor((x - gridOriginX) / cellSize);
+  const row = Math.floor((y - gridOriginY) / cellSize);
+
+  if (row >= 0 && row < gridHeight && col >= 0 && col < gridWidth) {
+    return { row, col };
+  }
+  return null;
+}
+
+function paintCell(row, col) {
+  const nextColor = currentTool === "eraser" ? "#ffffff" : currentColor;
+  if (grid[row][col] === nextColor) return;
+
+  grid[row][col] = nextColor;
+  render();
+  saveArtworkToLocalStorage();
+}
+
+function saveState() {
+  undoStack.push({
+    grid: cloneGrid(grid),
+    width: gridWidth,
+    height: gridHeight,
+  });
+  if (undoStack.length > 80) {
+    undoStack.shift();
+  }
+  redoStack = [];
+}
+
+function restoreHistoryState(state) {
+  gridWidth = state.width;
+  gridHeight = state.height;
+  grid = cloneGrid(state.grid);
+  syncGridInputs();
+  updateCanvasMetrics();
+  render();
+  saveArtworkToLocalStorage();
+}
+
+function undo() {
+  if (!undoStack.length) return;
+
+  const previousState = undoStack.pop();
+  const currentState = {
+    grid: cloneGrid(grid),
+    width: gridWidth,
+    height: gridHeight,
+  };
+  redoStack.push(currentState);
+  restoreHistoryState(previousState);
+}
+
+function redo() {
+  if (!redoStack.length) return;
+
+  const nextState = redoStack.pop();
+  const currentState = {
+    grid: cloneGrid(grid),
+    width: gridWidth,
+    height: gridHeight,
+  };
+  undoStack.push(currentState);
+  restoreHistoryState(nextState);
+}
+
+function floodFill(row, col, newColor) {
+  const targetColor = grid[row][col];
+  if (targetColor === newColor) return;
+
+  const stack = [[row, col]];
+  while (stack.length) {
+    const [nextRow, nextCol] = stack.pop();
+    if (nextRow < 0 || nextRow >= gridHeight || nextCol < 0 || nextCol >= gridWidth) continue;
+    if (grid[nextRow][nextCol] !== targetColor) continue;
+
+    grid[nextRow][nextCol] = newColor;
+
+    stack.push([nextRow - 1, nextCol]);
+    stack.push([nextRow + 1, nextCol]);
+    stack.push([nextRow, nextCol - 1]);
+    stack.push([nextRow, nextCol + 1]);
+  }
+
+  render();
+  saveArtworkToLocalStorage();
+}
+
+function buildPalette() {
+  const palette = document.getElementById("color-palette");
+  PRESET_COLORS.forEach((color, index) => {
+    const swatch = document.createElement("button");
+    swatch.type = "button";
+    swatch.classList.add("color-swatch");
+    swatch.setAttribute("aria-label", `${COLOR_NAMES[index]} ${color}`);
+    const colorBlock = document.createElement("span");
+    colorBlock.className = "swatch-color";
+    colorBlock.style.backgroundColor = color;
+    const label = document.createElement("span");
+    label.className = "swatch-label";
+    label.textContent = COLOR_NAMES[index];
+    swatch.append(colorBlock, label);
+    if (color === currentColor) {
+      swatch.classList.add("active");
+    }
+    swatch.addEventListener("click", () => {
+      setCurrentColor(color);
+      closeColorModal();
+    });
+    palette.appendChild(swatch);
+  });
+}
+
+function setCurrentColor(color) {
+  currentColor = color;
+  document.getElementById("custom-color").value = color;
+  document.getElementById("custom-color-value").textContent = color;
+  document.querySelectorAll(".color-swatch").forEach((swatch) => {
+    swatch.classList.toggle("active", swatch.getAttribute("aria-label")?.endsWith(color));
+  });
+  document.querySelector("#current-color-preview span").style.backgroundColor = color;
+}
+
+function openColorModal() {
+  const modal = document.getElementById("color-modal");
+  modal.hidden = false;
+  document.getElementById("close-color-btn").focus();
+}
+
+function closeColorModal() {
+  document.getElementById("color-modal").hidden = true;
+  document.getElementById("open-color-btn").focus();
+}
+
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#f5f0e8";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.font = "12px 'Segoe UI', sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#3d3529";
+
+  for (let row = 0; row < gridHeight; row++) {
+    const pixelY = gridOriginY + row * cellSize + cellSize / 2;
+    const sideValue = gridHeight - row;
+    const xPos = sideValue % 2 === 1 ? gridOriginX + gridWidth * cellSize + 18 : gridOriginX - 18;
+    ctx.fillText(String(sideValue), xPos, pixelY);
+  }
+
+  for (let col = 0; col < gridWidth; col++) {
+    const pixelX = gridOriginX + col * cellSize + cellSize / 2;
+    const topValue = col + 1;
+    const bottomValue = gridWidth - col;
+    ctx.fillText(String(topValue), pixelX, gridOriginY - 18);
+    ctx.fillText(String(bottomValue), pixelX, gridOriginY + gridHeight * cellSize + 18);
+  }
+
+  for (let row = 0; row < gridHeight; row++) {
+    for (let col = 0; col < gridWidth; col++) {
+      const cellX = gridOriginX + col * cellSize;
+      const cellY = gridOriginY + row * cellSize;
+      const isDimmed = currentMode === "progress" && selectedRow !== null && row !== selectedRow;
+
+      ctx.save();
+      if (isDimmed) {
+        ctx.fillStyle = "#000000";
+        ctx.globalAlpha = 0.85;
+        ctx.fillRect(cellX, cellY, cellSize, cellSize);
+        ctx.restore();
+        ctx.fillStyle = grid[row][col] || "#ffffff";
+        ctx.globalAlpha = 0.15;
+        ctx.fillRect(cellX, cellY, cellSize, cellSize);
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.fillStyle = grid[row][col] || "#ffffff";
+        ctx.fillRect(cellX, cellY, cellSize, cellSize);
+      }
+      ctx.restore();
+
+      ctx.strokeStyle = "#d6c9af";
+      ctx.lineWidth = 0.65;
+      ctx.strokeRect(cellX, cellY, cellSize, cellSize);
+    }
+  }
+
+  if (hoveredCell && !isDrawing && currentMode === "draw") {
+    const { row, col } = hoveredCell;
+    const previewColor = currentTool === "eraser" ? "#ffffff" : currentColor;
+    ctx.fillStyle = previewColor;
+    ctx.globalAlpha = 0.4;
+    ctx.fillRect(gridOriginX + col * cellSize, gridOriginY + row * cellSize, cellSize, cellSize);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function init() {
+  restoreArtworkFromLocalStorage();
+  if (!grid.length) {
+    grid = createEmptyGrid(gridWidth, gridHeight);
+  }
+  syncGridInputs();
+  setTool(currentTool);
+  setMode(currentMode);
+  updateCanvasMetrics();
+  render();
+}
+
+canvas.addEventListener("pointerdown", (event) => {
+  if (currentMode === "progress") {
+    const cell = getCellFromMouse(event);
+    if (cell) {
+      selectedRow = cell.row;
+      render();
+    }
+    return;
+  }
+
+  const cell = getCellFromMouse(event);
+  if (!cell) return;
+
+  isDrawing = true;
+  saveState();
+
+  if (currentTool === "fill") {
+    floodFill(cell.row, cell.col, currentColor);
+  } else {
+    paintCell(cell.row, cell.col);
+  }
 });
 
-// --- Step 6: PNG export ---
-document.querySelector(".export-btn").addEventListener("click", (e) =>{
-    const exportCanvas = document.createElement('canvas');
-    const exportCtx = exportCanvas.getContext('2d');
-    const exportCellSize = Math.max(16, Math.floor(512 / gridSize));
-    exportCanvas.width = gridSize * exportCellSize;
-    exportCanvas.height = gridSize * exportCellSize;
+canvas.addEventListener("pointermove", (event) => {
+  const cell = getCellFromMouse(event);
+  hoveredCell = cell;
 
-    for(let row =0; row < gridSize; row++) {
-        for (let col = 0; col < gridSize; col++) {
-            exportCtx.fillStyle = grid[row][col];
-            exportCtx.fillRect(col * exportCellSize, row * exportCellSize, exportCellSize, exportCellSize);
-        }
+  if (currentMode === "progress") {
+    render();
+    return;
+  }
+
+  if (isDrawing && currentTool !== "fill" && cell) {
+    paintCell(cell.row, cell.col);
+  } else {
+    render();
+  }
+});
+
+canvas.addEventListener("pointerup", () => {
+  if (isDrawing) {
+    isDrawing = false;
+    saveArtworkToLocalStorage();
+  }
+});
+
+canvas.addEventListener("pointerleave", () => {
+  if (isDrawing) {
+    isDrawing = false;
+    hoveredCell = null;
+    render();
+    saveArtworkToLocalStorage();
+  } else {
+    hoveredCell = null;
+    render();
+  }
+});
+
+document.querySelectorAll(".tool-btn").forEach((button) => {
+  button.addEventListener("click", () => setTool(button.dataset.tool));
+});
+
+document.getElementById("custom-color").addEventListener("input", (event) => {
+  document.getElementById("custom-color-value").textContent = event.target.value;
+});
+
+document.getElementById("mode-select").addEventListener("change", (event) => {
+  setMode(event.target.value);
+});
+
+document.getElementById("grid-size").addEventListener("change", (event) => {
+  const nextValue = Number(event.target.value);
+  if (!nextValue) return;
+  saveState();
+  applyGridSize(nextValue, nextValue);
+});
+
+document.getElementById("apply-grid-size").addEventListener("click", () => {
+  const width = Number(document.getElementById("grid-width").value) || gridWidth;
+  const height = Number(document.getElementById("grid-height").value) || gridHeight;
+  saveState();
+  applyGridSize(width, height);
+});
+
+document.getElementById("undo-btn").addEventListener("click", undo);
+document.getElementById("redo-btn").addEventListener("click", redo);
+document.getElementById("delete-btn").addEventListener("click", deleteSavedArtwork);
+document.getElementById("open-color-btn").addEventListener("click", openColorModal);
+document.getElementById("close-color-btn").addEventListener("click", closeColorModal);
+document.getElementById("apply-custom-color").addEventListener("click", () => {
+  setCurrentColor(document.getElementById("custom-color").value);
+  closeColorModal();
+});
+document.getElementById("color-modal").addEventListener("click", (event) => {
+  if (event.target.id === "color-modal") closeColorModal();
+});
+
+window.addEventListener("beforeunload", saveArtworkToLocalStorage);
+window.addEventListener("pagehide", saveArtworkToLocalStorage);
+
+window.addEventListener("resize", () => {
+  updateCanvasMetrics();
+  render();
+});
+
+window.addEventListener("keydown", (event) => {
+  const key = event.key.toLowerCase();
+  const modifier = event.ctrlKey || event.metaKey;
+  const colorModal = document.getElementById("color-modal");
+
+  if (key === "escape" && colorModal && !colorModal.hidden) {
+    event.preventDefault();
+    closeColorModal();
+    return;
+  }
+
+  if (modifier && key === "z") {
+    event.preventDefault();
+    event.stopPropagation();
+    undo();
+    return;
+  }
+
+  if (modifier && (key === "y" || (event.shiftKey && key === "z"))) {
+    event.preventDefault();
+    event.stopPropagation();
+    redo();
+    return;
+  }
+
+  const tag = event.target && event.target.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || event.target.isContentEditable) return;
+
+  if (!modifier) {
+    if (key === "c") {
+      event.preventDefault();
+      openColorModal();
+      return;
     }
-    const link = document.createElement("a");
-    //confirm download
-    const confirmed = confirm("Do you want to download your pixel art as a PNG image?");
-    if (!confirmed) return;
-    //generate random names cause why am i doing barbaric work??
-    const randomValue = Math.floor(Math.random() * 100000);
-    link.download = `pixel-art-${randomValue}.png`;
-    link.href = exportCanvas.toDataURL("image/png");
-    link.click();
-})
 
-init(true);
+    if (currentMode === "progress" && (key === "arrowup" || key === "arrowdown")) {
+      event.preventDefault();
+      const direction = key === "arrowup" ? -1 : 1;
+      const currentRow = selectedRow === null
+        ? (direction === 1 ? 0 : gridHeight - 1)
+        : selectedRow;
+      selectedRow = clamp(currentRow + direction, 0, gridHeight - 1);
+      render();
+      return;
+    }
+
+    if (key === "p") setTool("pen");
+    else if (key === "e") setTool("eraser");
+    else if (key === "f") setTool("fill");
+    else if (key === "d") setMode("draw");
+    else if (key === "g") setMode("progress");
+  }
+});
+
+document.getElementById("export-btn").addEventListener("click", () => {
+  const confirmed = window.confirm("Do you want to download your pattern sheet as a PNG?");
+  if (!confirmed) return;
+
+  const exportCanvas = document.createElement("canvas");
+  const exportCtx = exportCanvas.getContext("2d");
+  const padding = 80;
+  const exportCellSize = Math.max(18, Math.floor(1000 / Math.max(gridWidth, gridHeight)));
+  const exportWidth = gridWidth * exportCellSize + padding * 2 + 80;
+  const exportHeight = gridHeight * exportCellSize + padding * 2 + 80;
+
+  exportCanvas.width = exportWidth;
+  exportCanvas.height = exportHeight;
+  exportCtx.fillStyle = "#f5f0e8";
+  exportCtx.fillRect(0, 0, exportWidth, exportHeight);
+
+  const originX = padding + 30;
+  const originY = padding + 30;
+
+  for (let row = 0; row < gridHeight; row++) {
+    for (let col = 0; col < gridWidth; col++) {
+      exportCtx.fillStyle = grid[row][col] || "#ffffff";
+      exportCtx.fillRect(originX + col * exportCellSize, originY + row * exportCellSize, exportCellSize, exportCellSize);
+      exportCtx.strokeStyle = "#d6c9af";
+      exportCtx.lineWidth = 1;
+      exportCtx.strokeRect(originX + col * exportCellSize, originY + row * exportCellSize, exportCellSize, exportCellSize);
+    }
+  }
+
+  exportCtx.fillStyle = "#3d3529";
+  exportCtx.font = "12px 'Segoe UI', sans-serif";
+  exportCtx.textAlign = "center";
+  exportCtx.textBaseline = "middle";
+
+  for (let row = 0; row < gridHeight; row++) {
+    const y = originY + row * exportCellSize + exportCellSize / 2;
+    const sideValue = gridHeight - row;
+    const xPos = sideValue % 2 === 1 ? originX + gridWidth * exportCellSize + 18 : originX - 18;
+    exportCtx.fillText(String(sideValue), xPos, y);
+  }
+
+  for (let col = 0; col < gridWidth; col++) {
+    const x = originX + col * exportCellSize + exportCellSize / 2;
+    const topValue = col + 1;
+    const bottomValue = gridWidth - col;
+    exportCtx.fillText(String(topValue), x, originY - 18);
+    exportCtx.fillText(String(bottomValue), x, originY + gridHeight * exportCellSize + 18);
+  }
+
+  const link = document.createElement("a");
+  const randomValue = Math.floor(Math.random() * 100000);
+  link.download = `pixel-art-${randomValue}.png`;
+  link.href = exportCanvas.toDataURL("image/png");
+  link.click();
+});
+
+buildPalette();
+setCurrentColor(currentColor);
+init();
