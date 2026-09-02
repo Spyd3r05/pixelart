@@ -326,17 +326,18 @@ function floodFill(row, col, newColor) {
 
 function buildPalette() {
   const palette = document.getElementById("color-palette");
+  palette.innerHTML = "";
   PRESET_COLORS.forEach((color, index) => {
     const swatch = document.createElement("button");
     swatch.type = "button";
     swatch.classList.add("color-swatch");
-    swatch.setAttribute("aria-label", `${COLOR_NAMES[index]} ${color}`);
+    swatch.setAttribute("aria-label", `${COLOR_NAMES[index] || "Custom"} ${color}`);
     const colorBlock = document.createElement("span");
     colorBlock.className = "swatch-color";
     colorBlock.style.backgroundColor = color;
     const label = document.createElement("span");
     label.className = "swatch-label";
-    label.textContent = COLOR_NAMES[index];
+    label.textContent = COLOR_NAMES[index] || color;
     swatch.append(colorBlock, label);
     if (color === currentColor) {
       swatch.classList.add("active");
@@ -695,36 +696,166 @@ document.getElementById("export-btn").addEventListener("click", () => {
   link.click();
 });
 
+let pendingImportImage = null;
+let originalImportAspect = 1;
+
+function hexToRgb(hex) {
+  let cleaned = hex.replace("#", "");
+  if (cleaned.length === 3) {
+    cleaned = cleaned.split("").map(c => c + c).join("");
+  }
+  const num = parseInt(cleaned, 16);
+  return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+}
+
+function rgbToHex(r, g, b) {
+  return "#" + [r, g, b].map(x => {
+    const hex = x.toString(16);
+    return hex.length === 1 ? "0" + hex : hex;
+  }).join("");
+}
+
+function colorDistance(rgb1, rgb2) {
+  return Math.sqrt(
+    Math.pow(rgb1[0] - rgb2[0], 2) +
+    Math.pow(rgb1[1] - rgb2[1], 2) +
+    Math.pow(rgb1[2] - rgb2[2], 2)
+  );
+}
+
+const importModal = document.getElementById("import-modal");
+const importWidthInput = document.getElementById("import-width");
+const importHeightInput = document.getElementById("import-height");
+const importAspectLock = document.getElementById("import-aspect-lock");
+const importPreviewImg = document.getElementById("import-preview-img");
+
 document.getElementById("import-btn").addEventListener("click", () => document.getElementById("import-input").click());
 
 document.getElementById("import-input").addEventListener("change", (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (!confirm("Importing will replace your current grid and palette. Proceed?")) return;
-
     const reader = new FileReader();
     reader.onload = (event) => {
         const img = new Image();
         img.onload = () => {
-            // Sanitize dimensions
-            const targetWidth = Math.min(img.width, 200);
-            const targetHeight = Math.min(img.height, 200);
+            pendingImportImage = img;
+            originalImportAspect = img.width / img.height;
 
-            if (confirm(`Auto-adjust grid to ${targetWidth}x${targetHeight}?`)) {
-                applyGridSize(targetWidth, targetHeight, { preserveArtwork: false });
-            }
-            
-            traceOverlay = img;
-            traceOffsetX = 0;
-            traceOffsetY = 0;
-            setMode("trace");
-            // Ensure next frame uses the image
-            requestAnimationFrame(() => render());
+            let defaultW = Math.min(Math.max(img.width, 16), 48);
+            let defaultH = Math.round(defaultW / originalImportAspect);
+            defaultH = Math.min(Math.max(defaultH, 8), 48);
+
+            importWidthInput.value = defaultW;
+            importHeightInput.value = defaultH;
+            importPreviewImg.src = img.src;
+
+            importModal.hidden = false;
         };
         img.src = event.target.result;
     };
     reader.readAsDataURL(file);
+    e.target.value = "";
+});
+
+document.getElementById("close-import-btn").addEventListener("click", () => {
+    importModal.hidden = true;
+});
+
+importWidthInput.addEventListener("input", () => {
+    if (importAspectLock.checked) {
+        const w = Number(importWidthInput.value) || 16;
+        let h = Math.round(w / originalImportAspect);
+        importHeightInput.value = clamp(h, 8, 150);
+    }
+});
+
+importHeightInput.addEventListener("input", () => {
+    if (importAspectLock.checked) {
+        const h = Number(importHeightInput.value) || 16;
+        let w = Math.round(h * originalImportAspect);
+        importWidthInput.value = clamp(w, 8, 150);
+    }
+});
+
+document.getElementById("confirm-import-btn").addEventListener("click", () => {
+    if (!pendingImportImage) return;
+
+    const targetW = clamp(Number(importWidthInput.value) || 32, 8, 150);
+    const targetH = clamp(Number(importHeightInput.value) || 32, 8, 150);
+    const mode = document.querySelector('input[name="import-mode"]:checked').value;
+
+    importModal.hidden = true;
+
+    if (!confirm("Importing will replace your current grid. Proceed?")) return;
+
+    saveState();
+    applyGridSize(targetW, targetH, { preserveArtwork: false });
+
+    if (mode === "autoplot") {
+        const tempCanvas = document.createElement("canvas");
+        tempCanvas.width = targetW;
+        tempCanvas.height = targetH;
+        const tempCtx = tempCanvas.getContext("2d");
+        tempCtx.drawImage(pendingImportImage, 0, 0, targetW, targetH);
+        const imgData = tempCtx.getImageData(0, 0, targetW, targetH).data;
+
+        const newGrid = createEmptyGrid(targetW, targetH);
+
+        for (let row = 0; row < targetH; row++) {
+            for (let col = 0; col < targetW; col++) {
+                const idx = (row * targetW + col) * 4;
+                const r = imgData[idx];
+                const g = imgData[idx + 1];
+                const b = imgData[idx + 2];
+                const a = imgData[idx + 3];
+
+                if (a < 128) {
+                    newGrid[row][col] = "#ffffff";
+                    continue;
+                }
+
+                const pixelRgb = [r, g, b];
+                let bestMatchColor = null;
+                let minDistance = Infinity;
+
+                for (const presetColor of PRESET_COLORS) {
+                    const presetRgb = hexToRgb(presetColor);
+                    const dist = colorDistance(pixelRgb, presetRgb);
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                        bestMatchColor = presetColor;
+                    }
+                }
+
+                if (minDistance < 25) {
+                    newGrid[row][col] = bestMatchColor;
+                } else {
+                    const hex = rgbToHex(r, g, b);
+                    if (!PRESET_COLORS.includes(hex)) {
+                        if (PRESET_COLORS.length < 64) {
+                            PRESET_COLORS.push(hex);
+                            COLOR_NAMES.push(`Custom #${hex.replace('#','')}`);
+                        }
+                    }
+                    newGrid[row][col] = hex;
+                }
+            }
+        }
+
+        grid = newGrid;
+        buildPalette();
+        setCurrentColor(currentColor);
+        setMode("draw");
+        render();
+        saveArtworkToLocalStorage();
+    } else {
+        traceOverlay = pendingImportImage;
+        traceOffsetX = 0;
+        traceOffsetY = 0;
+        setMode("trace");
+        render();
+    }
 });
 
 buildPalette();
