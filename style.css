@@ -317,6 +317,29 @@ input[type="number"] {
     gap: 8px;
 }
 
+.anchor-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    margin: 8px 0;
+}
+
+.anchor-btn {
+    padding: 6px;
+    border: 2px solid #c9b99a;
+    border-radius: 4px;
+    background-color: #f5f0e8;
+    color: #3d3529;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.anchor-btn.active {
+    background-color: #b0603a;
+    border-color: #b0603a;
+    color: #f5f0e8;
+}
+
 .size-row label {
     display: flex;
     flex-direction: column;
