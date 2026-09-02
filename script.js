@@ -707,15 +707,20 @@ document.getElementById("import-input").addEventListener("change", (e) => {
     reader.onload = (event) => {
         const img = new Image();
         img.onload = () => {
-            if (confirm("Auto-adjust grid to image resolution?")) {
-                applyGridSize(img.width, img.height, { preserveArtwork: false });
+            // Sanitize dimensions
+            const targetWidth = Math.min(img.width, 200);
+            const targetHeight = Math.min(img.height, 200);
+
+            if (confirm(`Auto-adjust grid to ${targetWidth}x${targetHeight}?`)) {
+                applyGridSize(targetWidth, targetHeight, { preserveArtwork: false });
             }
             
             traceOverlay = img;
             traceOffsetX = 0;
             traceOffsetY = 0;
             setMode("trace");
-            render();
+            // Ensure next frame uses the image
+            requestAnimationFrame(() => render());
         };
         img.src = event.target.result;
     };
