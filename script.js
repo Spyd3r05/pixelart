@@ -228,7 +228,24 @@ function setMode(mode) {
   }
   const modeSelect = document.getElementById("mode-select");
   if (modeSelect) modeSelect.value = mode;
+
+  const clearBtn = document.getElementById("clear-trace-btn");
+  if (clearBtn) {
+    clearBtn.style.display = (currentMode === "trace" && traceOverlay) ? "block" : "none";
+  }
+
   render();
+}
+
+function clearTraceOverlay() {
+  traceOverlay = null;
+  const clearBtn = document.getElementById("clear-trace-btn");
+  if (clearBtn) clearBtn.style.display = "none";
+  if (currentMode === "trace") {
+    setMode("draw");
+  } else {
+    render();
+  }
 }
 
 function getCellFromMouse(event) {
@@ -417,17 +434,25 @@ function render() {
       const isDimmed = currentMode === "progress" && selectedRow !== null && row !== selectedRow;
 
       ctx.save();
+      const cellColor = grid[row][col] || "#ffffff";
+      const isBlank = cellColor === "#ffffff";
+
       if (isDimmed) {
         ctx.fillStyle = "#000000";
         ctx.globalAlpha = 0.85;
         ctx.fillRect(cellX, cellY, cellSize, cellSize);
         ctx.restore();
-        ctx.fillStyle = grid[row][col] || "#ffffff";
+        ctx.fillStyle = cellColor;
         ctx.globalAlpha = 0.15;
         ctx.fillRect(cellX, cellY, cellSize, cellSize);
         ctx.globalAlpha = 1;
+      } else if (currentMode === "trace" && isBlank) {
+        // Skip filling blank cells in trace mode so the underlying image shows through cleanly
       } else {
-        ctx.fillStyle = grid[row][col] || "#ffffff";
+        ctx.fillStyle = cellColor;
+        if (currentMode === "trace" && !isBlank) {
+          ctx.globalAlpha = 0.8;
+        }
         ctx.fillRect(cellX, cellY, cellSize, cellSize);
       }
       ctx.restore();
@@ -559,6 +584,7 @@ document.querySelectorAll(".anchor-btn").forEach((button) => {
 document.getElementById("undo-btn").addEventListener("click", undo);
 document.getElementById("redo-btn").addEventListener("click", redo);
 document.getElementById("delete-btn").addEventListener("click", deleteSavedArtwork);
+document.getElementById("clear-trace-btn").addEventListener("click", clearTraceOverlay);
 document.getElementById("open-color-btn").addEventListener("click", openColorModal);
 document.getElementById("close-color-btn").addEventListener("click", closeColorModal);
 document.getElementById("apply-custom-color").addEventListener("click", () => {
@@ -854,6 +880,8 @@ document.getElementById("confirm-import-btn").addEventListener("click", () => {
         traceOffsetX = 0;
         traceOffsetY = 0;
         setMode("trace");
+        const clearBtn = document.getElementById("clear-trace-btn");
+        if (clearBtn) clearBtn.style.display = "block";
         render();
     }
 });
