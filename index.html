@@ -13,10 +13,17 @@
 <main>
     <aside class="toolbar" id="toolbar">
         <div class="tool-section">
+            <h3>Import</h3>
+            <button id="import-btn" class="secondary-btn" type="button">Import Image</button>
+            <input type="file" id="import-input" accept="image/png, image/jpeg" hidden />
+        </div>
+
+        <div class="tool-section">
             <h3>Mode</h3>
             <select id="mode-select">
                 <option value="draw" selected>Draw</option>
                 <option value="progress">Progress Tracker</option>
+                <option value="trace">Trace Image</option>
             </select>
         </div>
 

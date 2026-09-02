@@ -10,6 +10,10 @@ let currentColor = "#000000";
 let currentTool = "pen";
 let currentMode = "draw";
 let currentAnchor = "center";
+let traceOverlay = null;
+let traceOffsetX = 0;
+let traceOffsetY = 0;
+let traceOpacity = 0.3;
 let isDrawing = false;
 let hoveredCell = null;
 let selectedRow = null;
@@ -371,6 +375,20 @@ function render() {
   ctx.fillStyle = "#f5f0e8";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+  // Render Trace Overlay
+  if (currentMode === "trace" && traceOverlay) {
+    ctx.save();
+    ctx.globalAlpha = traceOpacity;
+    ctx.drawImage(
+      traceOverlay,
+      gridOriginX + traceOffsetX * cellSize,
+      gridOriginY + traceOffsetY * cellSize,
+      gridWidth * cellSize,
+      gridHeight * cellSize
+    );
+    ctx.restore();
+  }
+
   ctx.font = "12px 'Segoe UI', sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -604,6 +622,15 @@ window.addEventListener("keydown", (event) => {
       return;
     }
 
+    if (currentMode === "trace") {
+        if (key === "arrowup") { traceOffsetY--; render(); return; }
+        if (key === "arrowdown") { traceOffsetY++; render(); return; }
+        if (key === "arrowleft") { traceOffsetX--; render(); return; }
+        if (key === "arrowright") { traceOffsetX++; render(); return; }
+        if (key === "+" || key === "=") { traceOpacity = clamp(traceOpacity + 0.1, 0, 1); render(); return; }
+        if (key === "-" || key === "_") { traceOpacity = clamp(traceOpacity - 0.1, 0, 1); render(); return; }
+    }
+
     if (key === "p") setTool("pen");
     else if (key === "e") setTool("eraser");
     else if (key === "f") setTool("fill");
@@ -666,6 +693,33 @@ document.getElementById("export-btn").addEventListener("click", () => {
   link.download = `pixel-art-${randomValue}.png`;
   link.href = exportCanvas.toDataURL("image/png");
   link.click();
+});
+
+document.getElementById("import-btn").addEventListener("click", () => document.getElementById("import-input").click());
+
+document.getElementById("import-input").addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!confirm("Importing will replace your current grid and palette. Proceed?")) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+            if (confirm("Auto-adjust grid to image resolution?")) {
+                applyGridSize(img.width, img.height, { preserveArtwork: false });
+            }
+            
+            traceOverlay = img;
+            traceOffsetX = 0;
+            traceOffsetY = 0;
+            setMode("trace");
+            render();
+        };
+        img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
 });
 
 buildPalette();
