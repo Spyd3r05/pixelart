@@ -10,6 +10,10 @@ let currentColor = "#000000";
 let currentTool = "pen";
 let currentMode = "draw";
 let currentAnchor = "center";
+let traceOverlay = null;
+let traceOffsetX = 0;
+let traceOffsetY = 0;
+let traceOpacity = 0.3;
 let isDrawing = false;
 let hoveredCell = null;
 let selectedRow = null;
@@ -224,7 +228,24 @@ function setMode(mode) {
   }
   const modeSelect = document.getElementById("mode-select");
   if (modeSelect) modeSelect.value = mode;
+
+  const clearBtn = document.getElementById("clear-trace-btn");
+  if (clearBtn) {
+    clearBtn.style.display = (currentMode === "trace" && traceOverlay) ? "block" : "none";
+  }
+
   render();
+}
+
+function clearTraceOverlay() {
+  traceOverlay = null;
+  const clearBtn = document.getElementById("clear-trace-btn");
+  if (clearBtn) clearBtn.style.display = "none";
+  if (currentMode === "trace") {
+    setMode("draw");
+  } else {
+    render();
+  }
 }
 
 function getCellFromMouse(event) {
@@ -322,17 +343,18 @@ function floodFill(row, col, newColor) {
 
 function buildPalette() {
   const palette = document.getElementById("color-palette");
+  palette.innerHTML = "";
   PRESET_COLORS.forEach((color, index) => {
     const swatch = document.createElement("button");
     swatch.type = "button";
     swatch.classList.add("color-swatch");
-    swatch.setAttribute("aria-label", `${COLOR_NAMES[index]} ${color}`);
+    swatch.setAttribute("aria-label", `${COLOR_NAMES[index] || "Custom"} ${color}`);
     const colorBlock = document.createElement("span");
     colorBlock.className = "swatch-color";
     colorBlock.style.backgroundColor = color;
     const label = document.createElement("span");
     label.className = "swatch-label";
-    label.textContent = COLOR_NAMES[index];
+    label.textContent = COLOR_NAMES[index] || color;
     swatch.append(colorBlock, label);
     if (color === currentColor) {
       swatch.classList.add("active");
@@ -371,6 +393,20 @@ function render() {
   ctx.fillStyle = "#f5f0e8";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+  // Render Trace Overlay
+  if (currentMode === "trace" && traceOverlay) {
+    ctx.save();
+    ctx.globalAlpha = traceOpacity;
+    ctx.drawImage(
+      traceOverlay,
+      gridOriginX + traceOffsetX * cellSize,
+      gridOriginY + traceOffsetY * cellSize,
+      gridWidth * cellSize,
+      gridHeight * cellSize
+    );
+    ctx.restore();
+  }
+
   ctx.font = "12px 'Segoe UI', sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -398,17 +434,25 @@ function render() {
       const isDimmed = currentMode === "progress" && selectedRow !== null && row !== selectedRow;
 
       ctx.save();
+      const cellColor = grid[row][col] || "#ffffff";
+      const isBlank = cellColor === "#ffffff";
+
       if (isDimmed) {
         ctx.fillStyle = "#000000";
         ctx.globalAlpha = 0.85;
         ctx.fillRect(cellX, cellY, cellSize, cellSize);
         ctx.restore();
-        ctx.fillStyle = grid[row][col] || "#ffffff";
+        ctx.fillStyle = cellColor;
         ctx.globalAlpha = 0.15;
         ctx.fillRect(cellX, cellY, cellSize, cellSize);
         ctx.globalAlpha = 1;
+      } else if (currentMode === "trace" && isBlank) {
+        // Skip filling blank cells in trace mode so the underlying image shows through cleanly
       } else {
-        ctx.fillStyle = grid[row][col] || "#ffffff";
+        ctx.fillStyle = cellColor;
+        if (currentMode === "trace" && !isBlank) {
+          ctx.globalAlpha = 0.8;
+        }
         ctx.fillRect(cellX, cellY, cellSize, cellSize);
       }
       ctx.restore();
@@ -540,6 +584,7 @@ document.querySelectorAll(".anchor-btn").forEach((button) => {
 document.getElementById("undo-btn").addEventListener("click", undo);
 document.getElementById("redo-btn").addEventListener("click", redo);
 document.getElementById("delete-btn").addEventListener("click", deleteSavedArtwork);
+document.getElementById("clear-trace-btn").addEventListener("click", clearTraceOverlay);
 document.getElementById("open-color-btn").addEventListener("click", openColorModal);
 document.getElementById("close-color-btn").addEventListener("click", closeColorModal);
 document.getElementById("apply-custom-color").addEventListener("click", () => {
@@ -604,6 +649,15 @@ window.addEventListener("keydown", (event) => {
       return;
     }
 
+    if (currentMode === "trace") {
+        if (key === "arrowup") { traceOffsetY--; render(); return; }
+        if (key === "arrowdown") { traceOffsetY++; render(); return; }
+        if (key === "arrowleft") { traceOffsetX--; render(); return; }
+        if (key === "arrowright") { traceOffsetX++; render(); return; }
+        if (key === "+" || key === "=") { traceOpacity = clamp(traceOpacity + 0.1, 0, 1); render(); return; }
+        if (key === "-" || key === "_") { traceOpacity = clamp(traceOpacity - 0.1, 0, 1); render(); return; }
+    }
+
     if (key === "p") setTool("pen");
     else if (key === "e") setTool("eraser");
     else if (key === "f") setTool("fill");
@@ -666,6 +720,170 @@ document.getElementById("export-btn").addEventListener("click", () => {
   link.download = `pixel-art-${randomValue}.png`;
   link.href = exportCanvas.toDataURL("image/png");
   link.click();
+});
+
+let pendingImportImage = null;
+let originalImportAspect = 1;
+
+function hexToRgb(hex) {
+  let cleaned = hex.replace("#", "");
+  if (cleaned.length === 3) {
+    cleaned = cleaned.split("").map(c => c + c).join("");
+  }
+  const num = parseInt(cleaned, 16);
+  return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+}
+
+function rgbToHex(r, g, b) {
+  return "#" + [r, g, b].map(x => {
+    const hex = x.toString(16);
+    return hex.length === 1 ? "0" + hex : hex;
+  }).join("");
+}
+
+function colorDistance(rgb1, rgb2) {
+  return Math.sqrt(
+    Math.pow(rgb1[0] - rgb2[0], 2) +
+    Math.pow(rgb1[1] - rgb2[1], 2) +
+    Math.pow(rgb1[2] - rgb2[2], 2)
+  );
+}
+
+const importModal = document.getElementById("import-modal");
+const importWidthInput = document.getElementById("import-width");
+const importHeightInput = document.getElementById("import-height");
+const importAspectLock = document.getElementById("import-aspect-lock");
+const importPreviewImg = document.getElementById("import-preview-img");
+
+document.getElementById("import-btn").addEventListener("click", () => document.getElementById("import-input").click());
+
+document.getElementById("import-input").addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+            pendingImportImage = img;
+            originalImportAspect = img.width / img.height;
+
+            let defaultW = Math.min(Math.max(img.width, 16), 48);
+            let defaultH = Math.round(defaultW / originalImportAspect);
+            defaultH = Math.min(Math.max(defaultH, 8), 48);
+
+            importWidthInput.value = defaultW;
+            importHeightInput.value = defaultH;
+            importPreviewImg.src = img.src;
+
+            importModal.hidden = false;
+        };
+        img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+});
+
+document.getElementById("close-import-btn").addEventListener("click", () => {
+    importModal.hidden = true;
+});
+
+importWidthInput.addEventListener("input", () => {
+    if (importAspectLock.checked) {
+        const w = Number(importWidthInput.value) || 16;
+        let h = Math.round(w / originalImportAspect);
+        importHeightInput.value = clamp(h, 8, 150);
+    }
+});
+
+importHeightInput.addEventListener("input", () => {
+    if (importAspectLock.checked) {
+        const h = Number(importHeightInput.value) || 16;
+        let w = Math.round(h * originalImportAspect);
+        importWidthInput.value = clamp(w, 8, 150);
+    }
+});
+
+document.getElementById("confirm-import-btn").addEventListener("click", () => {
+    if (!pendingImportImage) return;
+
+    const targetW = clamp(Number(importWidthInput.value) || 32, 8, 150);
+    const targetH = clamp(Number(importHeightInput.value) || 32, 8, 150);
+    const mode = document.querySelector('input[name="import-mode"]:checked').value;
+
+    importModal.hidden = true;
+
+    if (!confirm("Importing will replace your current grid. Proceed?")) return;
+
+    saveState();
+    applyGridSize(targetW, targetH, { preserveArtwork: false });
+
+    if (mode === "autoplot") {
+        const tempCanvas = document.createElement("canvas");
+        tempCanvas.width = targetW;
+        tempCanvas.height = targetH;
+        const tempCtx = tempCanvas.getContext("2d");
+        tempCtx.drawImage(pendingImportImage, 0, 0, targetW, targetH);
+        const imgData = tempCtx.getImageData(0, 0, targetW, targetH).data;
+
+        const newGrid = createEmptyGrid(targetW, targetH);
+
+        for (let row = 0; row < targetH; row++) {
+            for (let col = 0; col < targetW; col++) {
+                const idx = (row * targetW + col) * 4;
+                const r = imgData[idx];
+                const g = imgData[idx + 1];
+                const b = imgData[idx + 2];
+                const a = imgData[idx + 3];
+
+                if (a < 128) {
+                    newGrid[row][col] = "#ffffff";
+                    continue;
+                }
+
+                const pixelRgb = [r, g, b];
+                let bestMatchColor = null;
+                let minDistance = Infinity;
+
+                for (const presetColor of PRESET_COLORS) {
+                    const presetRgb = hexToRgb(presetColor);
+                    const dist = colorDistance(pixelRgb, presetRgb);
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                        bestMatchColor = presetColor;
+                    }
+                }
+
+                if (minDistance < 25) {
+                    newGrid[row][col] = bestMatchColor;
+                } else {
+                    const hex = rgbToHex(r, g, b);
+                    if (!PRESET_COLORS.includes(hex)) {
+                        if (PRESET_COLORS.length < 64) {
+                            PRESET_COLORS.push(hex);
+                            COLOR_NAMES.push(`Custom #${hex.replace('#','')}`);
+                        }
+                    }
+                    newGrid[row][col] = hex;
+                }
+            }
+        }
+
+        grid = newGrid;
+        buildPalette();
+        setCurrentColor(currentColor);
+        setMode("draw");
+        render();
+        saveArtworkToLocalStorage();
+    } else {
+        traceOverlay = pendingImportImage;
+        traceOffsetX = 0;
+        traceOffsetY = 0;
+        setMode("trace");
+        const clearBtn = document.getElementById("clear-trace-btn");
+        if (clearBtn) clearBtn.style.display = "block";
+        render();
+    }
 });
 
 buildPalette();
