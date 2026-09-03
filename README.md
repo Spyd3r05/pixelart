@@ -21,7 +21,8 @@ A desktop-first browser app for detailed pixel art, charted crochet patterns, an
 - Color picker modal — press `C` to open an aligned, labeled palette without scrolling
 - Preset and custom grid sizing — 16x16, 32x32, 64x64, 96x96, 128x128, and custom dimensions
 - Canvas expansion/cropping — use the 9-anchor selector to expand or crop your canvas from any edge or corner
-- Image import & conversion modal — upload any PNG/JPG, preview it, scale with aspect-ratio locking, and either **Auto-Plot** it directly into pixel art (with intelligent color grouping and palette expansion) or use **Trace Mode** as a reference overlay with arrow-key nudge support
+- Square Size slider — dynamically adjust canvas grid square size (14px to 44px) to seamlessly match pre-pixelated reference art 1:1
+- Image import & conversion modal — upload any PNG/JPG, preview it, scale with aspect-ratio locking, and either **Auto-Plot** it directly into pixel art (with intelligent color grouping and palette expansion) or use **Trace Mode** as a reference overlay with crisp nearest-neighbor scaling and precision nudge support
 - Undo/redo history — save the previous artwork state before each editing action
 - Local save — keep the project in the browser between sessions until the user explicitly deletes it
 - Delete Saved Work — permanently clear the stored artwork and reset to a blank 32x32 grid
@@ -70,7 +71,7 @@ Then visit `http://localhost:8000`.
 - `D` — draw mode
 - `C` — Color Swatches
 - `G` — progress tracker mode
-- `Arrow Keys` (in trace mode) — nudge image
+- `Arrow Keys` (in trace mode) — nudge image (hold `Shift` for precision 0.25 cell nudge)
 - `+` / `-` (in trace mode) — adjust opacity
 - `Ctrl/Cmd + Z` — undo
 - `Ctrl/Cmd + Y` — redo

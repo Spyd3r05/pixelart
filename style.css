@@ -300,7 +300,8 @@ kbd {
 }
 
 select,
-input[type="number"] {
+input[type="number"],
+input[type="range"] {
     width: 100%;
     padding: 8px;
     border: 2px solid #c9b99a;
@@ -309,6 +310,11 @@ input[type="number"] {
     color: #3d3529;
     font-size: 0.9rem;
     cursor: pointer;
+}
+
+input[type="range"] {
+    padding: 4px 0;
+    accent-color: #b0603a;
 }
 
 .size-row {
