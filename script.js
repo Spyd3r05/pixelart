@@ -4,7 +4,7 @@ const STORAGE_KEY = "pixelArt:last";
 
 let gridWidth = 32;
 let gridHeight = 32;
-let cellSize = 18;
+let cellSize = 28;
 let grid = [];
 let currentColor = "#000000";
 let currentTool = "pen";
@@ -92,7 +92,6 @@ function syncGridInputs() {
 
 function updateCanvasMetrics() {
   const guideSpace = 140;
-  cellSize = 44;
   gridOriginX = 70;
   gridOriginY = 70;
   canvas.width = gridWidth * cellSize + guideSpace;
@@ -397,6 +396,7 @@ function render() {
   if (currentMode === "trace" && traceOverlay) {
     ctx.save();
     ctx.globalAlpha = traceOpacity;
+    ctx.imageSmoothingEnabled = false;
     ctx.drawImage(
       traceOverlay,
       gridOriginX + traceOffsetX * cellSize,
@@ -569,6 +569,19 @@ document.getElementById("apply-grid-size").addEventListener("click", () => {
   applyGridSize(width, height, { anchor: currentAnchor });
 });
 
+const cellSizeSlider = document.getElementById("cell-size-slider");
+const cellSizeVal = document.getElementById("cell-size-val");
+if (cellSizeSlider) {
+  cellSizeSlider.value = cellSize;
+  if (cellSizeVal) cellSizeVal.textContent = `${cellSize}px`;
+  cellSizeSlider.addEventListener("input", (e) => {
+    cellSize = Number(e.target.value) || 28;
+    if (cellSizeVal) cellSizeVal.textContent = `${cellSize}px`;
+    updateCanvasMetrics();
+    render();
+  });
+}
+
 document.querySelectorAll(".anchor-btn").forEach((button) => {
   button.addEventListener("click", () => {
     currentAnchor = button.dataset.anchor;
@@ -650,10 +663,11 @@ window.addEventListener("keydown", (event) => {
     }
 
     if (currentMode === "trace") {
-        if (key === "arrowup") { traceOffsetY--; render(); return; }
-        if (key === "arrowdown") { traceOffsetY++; render(); return; }
-        if (key === "arrowleft") { traceOffsetX--; render(); return; }
-        if (key === "arrowright") { traceOffsetX++; render(); return; }
+        const step = event.shiftKey ? 0.25 : 1;
+        if (key === "arrowup") { traceOffsetY -= step; render(); return; }
+        if (key === "arrowdown") { traceOffsetY += step; render(); return; }
+        if (key === "arrowleft") { traceOffsetX -= step; render(); return; }
+        if (key === "arrowright") { traceOffsetX += step; render(); return; }
         if (key === "+" || key === "=") { traceOpacity = clamp(traceOpacity + 0.1, 0, 1); render(); return; }
         if (key === "-" || key === "_") { traceOpacity = clamp(traceOpacity - 0.1, 0, 1); render(); return; }
     }
