@@ -9,7 +9,7 @@ A desktop-first browser app for detailed pixel art, charted crochet patterns, an
 - Side and top/bottom numbering with alternating parity for easy pattern tracking
 - Artwork persistence when resizing the grid without expanding the original design unexpectedly
 - Directional canvas expansion and cropping with 9-anchor positioning
-- Image import and conversion modal — upload a PNG/JPG, preview it, set custom or auto-aspect target dimensions, and choose between **Auto-Plot** (converts image to pixels and auto-adds colors to palette) or **Trace Mode** (reference overlay with nudge controls)
+- Image import and conversion modal — upload a PNG/JPG or paste an image from the clipboard (via the Paste Image button or `Ctrl+V`), preview it, set custom or auto-aspect target dimensions, and choose between **Auto-Plot** (converts image to pixels and auto-adds colors to palette) or **Trace Mode** (reference overlay with nudge controls)
 - PNG export that includes the pixel art plus the numbered guide sheet for pattern reference
 
 ## Features
@@ -22,7 +22,7 @@ A desktop-first browser app for detailed pixel art, charted crochet patterns, an
 - Preset and custom grid sizing — 16x16, 32x32, 64x64, 96x96, 128x128, and custom dimensions
 - Canvas expansion/cropping — use the 9-anchor selector to expand or crop your canvas from any edge or corner
 - Square Size slider — dynamically adjust canvas grid square size (14px to 44px) to seamlessly match pre-pixelated reference art 1:1
-- Image import & conversion modal — upload any PNG/JPG, preview it, scale with aspect-ratio locking, and either **Auto-Plot** it directly into pixel art (with intelligent color grouping and palette expansion) or use **Trace Mode** as a reference overlay with crisp nearest-neighbor scaling and precision nudge support
+- Image import & conversion modal — upload any PNG/JPG or paste an image from the clipboard (via the Paste Image button or `Ctrl+V`), preview it, scale with aspect-ratio locking, and either **Auto-Plot** it directly into pixel art (with intelligent color grouping and palette expansion) or use **Trace Mode** as a reference overlay with crisp nearest-neighbor scaling and precision nudge support
 - Undo/redo history — save the previous artwork state before each editing action
 - Local save — keep the project in the browser between sessions until the user explicitly deletes it
 - Delete Saved Work — permanently clear the stored artwork and reset to a blank 32x32 grid
@@ -75,6 +75,7 @@ Then visit `http://localhost:8000`.
 - `+` / `-` (in trace mode) — adjust opacity
 - `Ctrl/Cmd + Z` — undo
 - `Ctrl/Cmd + Y` — redo
+- `Ctrl/Cmd + V` — paste image from clipboard for import
 
 ## Notes for pattern work
 - Numbers alternate on the grid edges, with odd values on the right and even values on the left; top and bottom rows follow the same alternating pattern.

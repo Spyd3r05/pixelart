@@ -769,7 +769,81 @@ const importHeightInput = document.getElementById("import-height");
 const importAspectLock = document.getElementById("import-aspect-lock");
 const importPreviewImg = document.getElementById("import-preview-img");
 
+function processImportImage(imgSrc) {
+    const img = new Image();
+    img.onload = () => {
+        pendingImportImage = img;
+        originalImportAspect = img.width / img.height;
+
+        let defaultW = Math.min(Math.max(img.width, 16), 48);
+        let defaultH = Math.round(defaultW / originalImportAspect);
+        defaultH = Math.min(Math.max(defaultH, 8), 48);
+
+        importWidthInput.value = defaultW;
+        importHeightInput.value = defaultH;
+        importPreviewImg.src = img.src;
+
+        importModal.hidden = false;
+    };
+    img.src = imgSrc;
+}
+
 document.getElementById("import-btn").addEventListener("click", () => document.getElementById("import-input").click());
+
+document.getElementById("paste-import-btn").addEventListener("click", async () => {
+    try {
+        if (!navigator.clipboard || !navigator.clipboard.read) {
+            alert("Clipboard reading is not supported in this browser. Try pressing Ctrl+V instead.");
+            return;
+        }
+        const clipboardItems = await navigator.clipboard.read();
+        let imageBlob = null;
+        for (const item of clipboardItems) {
+            const imageType = item.types.find(type => type.startsWith("image/"));
+            if (imageType) {
+                imageBlob = await item.getType(imageType);
+                break;
+            }
+        }
+        if (!imageBlob) {
+            alert("No image found in clipboard. Copy an image first!");
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            processImportImage(event.target.result);
+        };
+        reader.readAsDataURL(imageBlob);
+    } catch (error) {
+        console.warn("Failed to read clipboard via button", error);
+        alert("Could not access clipboard. Please make sure you have copied an image or try pressing Ctrl+V.");
+    }
+});
+
+window.addEventListener("paste", (event) => {
+    const tag = event.target && event.target.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || event.target.isContentEditable) return;
+
+    const items = event.clipboardData && event.clipboardData.items;
+    if (!items) return;
+
+    let imageBlob = null;
+    for (const item of items) {
+        if (item.type.startsWith("image/")) {
+            imageBlob = item.getAsFile();
+            break;
+        }
+    }
+
+    if (!imageBlob) return;
+
+    event.preventDefault();
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        processImportImage(e.target.result);
+    };
+    reader.readAsDataURL(imageBlob);
+});
 
 document.getElementById("import-input").addEventListener("change", (e) => {
     const file = e.target.files[0];
@@ -777,22 +851,7 @@ document.getElementById("import-input").addEventListener("change", (e) => {
 
     const reader = new FileReader();
     reader.onload = (event) => {
-        const img = new Image();
-        img.onload = () => {
-            pendingImportImage = img;
-            originalImportAspect = img.width / img.height;
-
-            let defaultW = Math.min(Math.max(img.width, 16), 48);
-            let defaultH = Math.round(defaultW / originalImportAspect);
-            defaultH = Math.min(Math.max(defaultH, 8), 48);
-
-            importWidthInput.value = defaultW;
-            importHeightInput.value = defaultH;
-            importPreviewImg.src = img.src;
-
-            importModal.hidden = false;
-        };
-        img.src = event.target.result;
+        processImportImage(event.target.result);
     };
     reader.readAsDataURL(file);
     e.target.value = "";
